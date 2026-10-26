@@ -21,3 +21,9 @@ Release requirements:
 - Keep release downloads public unless an authenticated distribution mechanism is added.
 
 **Status:** Project setup / architectural planning. No usable APK or update implementation has been released yet.
+
+## Visual identity — Silverlight family
+- Use the user's Silverlight UI reference images as the source of truth for the global palette and general visual language.
+- Share colors, panel treatments, controls, and typography direction; keep the mobile timeline touch-optimized and distinct from Silverlight.
+- Keep design tokens centralized (Compose theme: backgrounds, surfaces, accent, text, borders, states and timeline track colors).
+- Exact color values are pending confirmation from the original Silverlight screenshots; do not assume or invent exact sampled colors.
