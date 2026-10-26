@@ -18,12 +18,16 @@ jobs:
         with:
           gradle-version: '8.13'
       - name: Install Android SDK 36
-        run: |\n          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path "*/bin/sdkmanager" | head -n 1)"\n          yes | "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" || test ${PIPESTATUS[1]} -eq 0
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path "*/bin/sdkmanager" | head -n 1)"
+          yes | "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" || test ${PIPESTATUS[1]} -eq 0
       - name: Decode stable signing key
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.SHORTS_KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/shorts-stable.jks"
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/shorts-stable.jks"
+          fi
       - name: Build APK
         env:
           KEYSTORE_BASE64: ${{ secrets.SHORTS_KEYSTORE_BASE64 }}
