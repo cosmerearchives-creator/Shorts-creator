@@ -18,7 +18,7 @@ jobs:
         with:
           gradle-version: '8.13'
       - name: Install Android SDK 36
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+        run: |\n          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path "*/bin/sdkmanager" | head -n 1)"\n          yes | "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" || test ${PIPESTATUS[1]} -eq 0
       - name: Decode stable signing key
         if: ${{ env.KEYSTORE_BASE64 != '' }}
         env:
