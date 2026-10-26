@@ -38,7 +38,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L)
 data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList())
 
 class MainActivity : ComponentActivity() {
@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
                     val updated = projects.toMutableList()
                     val current = updated[selected]
                     val mime = contentResolver.getType(uri).orEmpty()
-                    updated[selected] = current.copy(clips = current.clips + Clip(uri.toString(), if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video", selectedTrack, 0L, if (mime.startsWith("video/")) getDuration(uri) else 0L))
+                    updated[selected] = current.copy(clips = current.clips + Clip(uri.toString(), if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video", if (mime.startsWith("audio/")) 2 else selectedTrack, 0L, if (mime.startsWith("video/")) getDuration(uri) else 0L))
                     projects = updated
                     saveProjects(projects)
                 }
@@ -138,10 +138,11 @@ class MainActivity : ComponentActivity() {
                             val project = projects[selected]
                             Text(project.name + " · " + project.ratio, style = MaterialTheme.typography.titleMedium)
                             Spacer(Modifier.height(8.dp))
-                            var activeClip by remember(selected, projects) { mutableIntStateOf(0) }
+                            var activeClip by remember(selected) { mutableIntStateOf(0) }
+                            var playheadMs by remember(selected) { mutableLongStateOf(0L) }
                             val currentClip = project.clips.getOrNull(activeClip)
                             if (currentClip != null && currentClip.kind == "video") {
-                                key(currentClip.uri, currentClip.startMs, currentClip.endMs) { VideoPreview(currentClip.uri, currentClip.startMs, currentClip.endMs) }
+                                key(currentClip.uri, currentClip.startMs, currentClip.endMs) { VideoPreview(currentClip.uri, currentClip.startMs, currentClip.endMs, playheadMs) }
                             } else {
                                 Box(Modifier.fillMaxWidth().height(230.dp).background(dark, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
                                     Text(if (currentClip?.kind == "audio") "Audio track selected" else "Import a video to preview", color = Color.White)
@@ -195,23 +196,29 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             Spacer(Modifier.height(12.dp))
-                            Text("Timeline (starter)", fontWeight = FontWeight.Bold)
-                            val lanes = listOf("V2 Overlay" to 1, "V1 Magnetic" to 0)
-                            lanes.forEach { (label, track) ->
-                                Card(colors = CardDefaults.cardColors(containerColor = lavender), modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                                    Column(Modifier.padding(10.dp)) {
-                                        Text(label, color = purple, fontWeight = FontWeight.SemiBold)
-                                        project.clips.forEachIndexed { i, clip ->
-                                            if (clip.track == track) {
-                                                TextButton(onClick = { activeClip = i }) {
-                                                    Text((if (clip.kind == "audio") "♪ " else "▣ ") + "Clip ${i+1}" + if (activeClip == i) " • selected" else "")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                            EditingTimeline(
+                                clips = project.clips,
+                                selectedIndex = activeClip,
+                                playheadMs = playheadMs,
+                                onSelect = { i -> activeClip = i; playheadMs = 0L },
+                                onScrub = { time -> playheadMs = time }
+                            )
+                            if (currentClip != null && currentClip.track != 0) {
+                                Text("Overlay position: ${currentClip.positionMs / 1000.0}s", style = MaterialTheme.typography.bodySmall)
+                                Slider(
+                                    value = currentClip.positionMs.toFloat().coerceIn(0f, 60000f),
+                                    onValueChange = { value ->
+                                        val updated = projects.toMutableList()
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(positionMs = value.toLong())
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                    },
+                                    onValueChangeFinished = { saveProjects(projects) },
+                                    valueRange = 0f..60000f
+                                )
                             }
-                            Text("V0.2: trim and export one selected video. Multitrack compositing, ripple edits, and splitting are not ready yet.", style = MaterialTheme.typography.bodySmall)
+                            Text("V0.4 timeline preview: clip placement and scrubbing. Multitrack rendering, splitting and drag-to-move still upcoming.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     if (newDialog) {
@@ -262,7 +269,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L))
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L))
             })
         }
     } catch (_: Exception) { emptyList() }
@@ -271,7 +278,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs)) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs)) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("clips", clips))
         }
         prefs.edit().putString("data", arr.toString()).apply()
@@ -281,7 +288,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun VideoPreview(source: String, startMs: Long, endMs: Long) {
+private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs: Long) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val player = remember(source) {
         ExoPlayer.Builder(context).build().apply {
@@ -289,6 +296,7 @@ private fun VideoPreview(source: String, startMs: Long, endMs: Long) {
             prepare()
         }
     }
+    LaunchedEffect(player, playheadMs) { player.seekTo(playheadMs.coerceAtLeast(0L)) }
     DisposableEffect(player) { onDispose { player.release() } }
     AndroidView(factory = { ctx -> PlayerView(ctx).apply { this.player = player } }, modifier = Modifier.fillMaxWidth().height(240.dp).background(dark))
 }
