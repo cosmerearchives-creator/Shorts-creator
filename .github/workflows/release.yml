@@ -49,7 +49,7 @@ jobs:
           if [ "${{ github.event_name }}" = "push" ]; then
             TAG="${GITHUB_REF_NAME}"
           else
-            TAG="v$(sed -n 's/.*versionName = "\\([^"]*\\)".*/\\1/p' app/build.gradle.kts | head -n 1)"
+            TAG="v$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | head -n 1 | cut -d '"' -f 2)"
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::error::Release $TAG exists. Increase versionCode/versionName before publishing."
