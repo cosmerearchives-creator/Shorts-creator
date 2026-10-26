@@ -52,11 +52,14 @@ class MainActivity : ComponentActivity() {
             var showSettings by remember { mutableStateOf(false) }
             var selectedTrack by remember { mutableIntStateOf(0) }
             var updateStatus by remember { mutableStateOf("") }
+            var availableUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
+            var downloading by remember { mutableStateOf(false) }
             var exportStatus by remember { mutableStateOf("") }
             LaunchedEffect(Unit) {
-                thread { val result = checkForUpdate(); runOnUiThread {
-                    if (result.startsWith("Latest release:")) updateStatus = result
-                } }
+                thread { try {
+                    val found = AppUpdater.latest(this@MainActivity)
+                    runOnUiThread { availableUpdate = found; updateStatus = if (found != null) "Update available: ${found.version}" else "Up to date" }
+                } catch (_: Exception) { /* quiet startup failure; manual check shows errors */ } }
             }
             val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null && selected in projects.indices) {
@@ -88,19 +91,31 @@ class MainActivity : ComponentActivity() {
                             Button(onClick = {
                                 updateStatus = "Checking GitHub Releases…"
                                 thread {
-                                    val result = checkForUpdate()
-                                    runOnUiThread { updateStatus = result }
+                                    try {
+                                        val found = AppUpdater.latest(this@MainActivity)
+                                        runOnUiThread { availableUpdate = found; updateStatus = if (found != null) "Update available: ${found.version}" else "Up to date" }
+                                    } catch (e: Exception) { runOnUiThread { updateStatus = "Update check failed: ${e.message}" } }
                                 }
                             }) { Text("Check for updates") }
                             Text(updateStatus)
+                            availableUpdate?.let { update ->
+                                Button(enabled = !downloading, onClick = {
+                                    downloading = true
+                                    updateStatus = "Downloading update…"
+                                    thread { try {
+                                        AppUpdater.downloadAndInstall(this@MainActivity, update) { percentage -> runOnUiThread { updateStatus = "Downloading: $percentage%" } }
+                                        runOnUiThread { updateStatus = "Approve installation in Android"; downloading = false }
+                                    } catch (e: Exception) { runOnUiThread { updateStatus = "Update failed: ${e.message}"; downloading = false } } }
+                                }) { Text(if (downloading) "Downloading…" else "Download and install ${update.version}") }
+                            }
                             OutlinedButton(onClick = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/cosmerearchives-creator/Shorts-creator/releases/latest"))) }) { Text("Open latest release") }
                             Text("Updates require Android installation approval. Install only official signed releases.", color = ink)
                         } else if (selected !in projects.indices) {
-                            if (updateStatus.startsWith("Latest release:")) {
+                            if (availableUpdate != null) {
                                 Card(colors = CardDefaults.cardColors(containerColor = lavender)) {
                                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                                         Text(updateStatus)
-                                        TextButton(onClick = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/cosmerearchives-creator/Shorts-creator/releases"))) }) { Text("View update") }
+                                        TextButton(onClick = { showSettings = true; selected = -1 }) { Text("Install update") }
                                     }
                                 }
                                 Spacer(Modifier.height(12.dp))
@@ -262,21 +277,7 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putString("data", arr.toString()).apply()
     }
 
-    private fun checkForUpdate(): String = try {
-        val conn = URL("https://api.github.com/repos/cosmerearchives-creator/Shorts-creator/releases?per_page=20").openConnection() as HttpURLConnection
-        conn.connectTimeout = 7000
-        conn.readTimeout = 7000
-        conn.setRequestProperty("Accept", "application/vnd.github+json")
-        val code = conn.responseCode
-        if (code == 404) "No published release yet." else if (code !in 200..299) "GitHub check failed (HTTP $code)." else {
-            val releases = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
-            val data = (0 until releases.length()).map { releases.getJSONObject(it) }.firstOrNull { !it.optBoolean("draft", false) }
-            val remote = data?.optString("tag_name").orEmpty()
-            if (remote.isBlank()) "No version information available."
-            else if (remote == "v0.2.0-alpha") "You're on the latest release."
-            else "Latest release: $remote. Tap Open latest release to review and download."
-        }
-    } catch (e: Exception) { "Update check unavailable: ${e.localizedMessage ?: "network error"}" }
+
 }
 
 @Composable
