@@ -249,14 +249,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkForUpdate(): String = try {
-        val conn = URL("https://api.github.com/repos/cosmerearchives-creator/Shorts-creator/releases/latest").openConnection() as HttpURLConnection
+        val conn = URL("https://api.github.com/repos/cosmerearchives-creator/Shorts-creator/releases?per_page=20").openConnection() as HttpURLConnection
         conn.connectTimeout = 7000
         conn.readTimeout = 7000
         conn.setRequestProperty("Accept", "application/vnd.github+json")
         val code = conn.responseCode
         if (code == 404) "No published release yet." else if (code !in 200..299) "GitHub check failed (HTTP $code)." else {
-            val data = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-            val remote = data.optString("tag_name")
+            val releases = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
+            val data = (0 until releases.length()).map { releases.getJSONObject(it) }.firstOrNull { !it.optBoolean("draft", false) }
+            val remote = data?.optString("tag_name").orEmpty()
             if (remote.isBlank()) "No version information available."
             else if (remote == "v0.2.0-alpha") "You're on the latest release."
             else "Latest release: $remote. Tap Open latest release to review and download."
