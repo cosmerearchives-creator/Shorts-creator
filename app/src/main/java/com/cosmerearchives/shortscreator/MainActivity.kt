@@ -53,6 +53,11 @@ class MainActivity : ComponentActivity() {
             var selectedTrack by remember { mutableIntStateOf(0) }
             var updateStatus by remember { mutableStateOf("") }
             var exportStatus by remember { mutableStateOf("") }
+            LaunchedEffect(Unit) {
+                thread { val result = checkForUpdate(); runOnUiThread {
+                    if (result.startsWith("Latest release:")) updateStatus = result
+                } }
+            }
             val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null && selected in projects.indices) {
                     try {
@@ -91,6 +96,15 @@ class MainActivity : ComponentActivity() {
                             OutlinedButton(onClick = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/cosmerearchives-creator/Shorts-creator/releases/latest"))) }) { Text("Open latest release") }
                             Text("Updates require Android installation approval. Install only official signed releases.", color = ink)
                         } else if (selected !in projects.indices) {
+                            if (updateStatus.startsWith("Latest release:")) {
+                                Card(colors = CardDefaults.cardColors(containerColor = lavender)) {
+                                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                                        Text(updateStatus)
+                                        TextButton(onClick = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/cosmerearchives-creator/Shorts-creator/releases"))) }) { Text("View update") }
+                                    }
+                                }
+                                Spacer(Modifier.height(12.dp))
+                            }
                             Text("Your projects", style = MaterialTheme.typography.titleMedium)
                             Spacer(Modifier.height(12.dp))
                             Button(onClick = { newDialog = true }) { Icon(Icons.Default.Add, null); Text(" New project") }
