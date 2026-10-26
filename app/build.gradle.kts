@@ -12,8 +12,8 @@ android {
         applicationId = "com.cosmerearchives.shortscreator"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-alpha"
+        versionCode = 2
+        versionName = "0.2.0-alpha"
     }
 
     val releaseStore = System.getenv("SHORTS_KEYSTORE_PATH")
@@ -52,6 +52,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
+    implementation("androidx.media3:media3-transformer:1.11.1")
 }
 
 kotlin {
