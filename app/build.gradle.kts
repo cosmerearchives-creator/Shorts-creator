@@ -1,0 +1,56 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
+}
+
+android {
+    namespace = "com.cosmerearchives.shortscreator"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.cosmerearchives.shortscreator"
+        minSdk = 26
+        targetSdk = 35
+        versionCode = 1
+        versionName = "0.1.0-alpha"
+    }
+
+    val releaseStore = System.getenv("SHORTS_KEYSTORE_PATH")
+    signingConfigs {
+        if (!releaseStore.isNullOrEmpty()) {
+            create("stable") {
+                storeFile = file(releaseStore)
+                storePassword = System.getenv("SHORTS_STORE_PASSWORD")
+                keyAlias = System.getenv("SHORTS_KEY_ALIAS")
+                keyPassword = System.getenv("SHORTS_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            if (!releaseStore.isNullOrEmpty()) signingConfig = signingConfigs.getByName("stable")
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            if (!releaseStore.isNullOrEmpty()) signingConfig = signingConfigs.getByName("stable")
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = "17" }
+    buildFeatures { compose = true }
+}
+
+dependencies {
+    implementation(platform("androidx.compose:compose-bom:2025.12.01"))
+    implementation("androidx.activity:activity-compose:1.11.0")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-ui:1.11.1")
+}
