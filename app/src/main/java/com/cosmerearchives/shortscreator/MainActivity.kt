@@ -3,6 +3,7 @@ package com.cosmerearchives.shortscreator
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.media.MediaMetadataRetriever
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -37,7 +38,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L)
 data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList())
 
 class MainActivity : ComponentActivity() {
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
             var showSettings by remember { mutableStateOf(false) }
             var selectedTrack by remember { mutableIntStateOf(0) }
             var updateStatus by remember { mutableStateOf("") }
+            var exportStatus by remember { mutableStateOf("") }
             val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null && selected in projects.indices) {
                     try {
@@ -59,7 +61,7 @@ class MainActivity : ComponentActivity() {
                     val updated = projects.toMutableList()
                     val current = updated[selected]
                     val mime = contentResolver.getType(uri).orEmpty()
-                    updated[selected] = current.copy(clips = current.clips + Clip(uri.toString(), if (mime.startsWith("audio/")) "audio" else "video", selectedTrack))
+                    updated[selected] = current.copy(clips = current.clips + Clip(uri.toString(), if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video", selectedTrack, 0L, if (mime.startsWith("video/")) getDuration(uri) else 0L))
                     projects = updated
                     saveProjects(projects)
                 }
@@ -110,7 +112,7 @@ class MainActivity : ComponentActivity() {
                             var activeClip by remember(selected, projects) { mutableIntStateOf(0) }
                             val currentClip = project.clips.getOrNull(activeClip)
                             if (currentClip != null && currentClip.kind == "video") {
-                                key(currentClip.uri) { VideoPreview(currentClip.uri) }
+                                key(currentClip.uri, currentClip.startMs, currentClip.endMs) { VideoPreview(currentClip.uri, currentClip.startMs, currentClip.endMs) }
                             } else {
                                 Box(Modifier.fillMaxWidth().height(230.dp).background(dark, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
                                     Text(if (currentClip?.kind == "audio") "Audio track selected" else "Import a video to preview", color = Color.White)
@@ -120,6 +122,48 @@ class MainActivity : ComponentActivity() {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = { selectedTrack = 0; launcher.launch(arrayOf("video/*", "audio/*")) }) { Text("Import") }
                                 OutlinedButton(onClick = { selectedTrack = 1; launcher.launch(arrayOf("video/*", "image/*", "audio/*")) }) { Text("Add overlay") }
+                            }
+                            if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs) {
+                                val duration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
+                                if (duration > 0) {
+                                    Text("Trim selected clip", fontWeight = FontWeight.SemiBold)
+                                    Text("Start: ${currentClip.startMs / 1000.0}s · End: ${currentClip.endMs / 1000.0}s", style = MaterialTheme.typography.bodySmall)
+                                    Text("In point", style = MaterialTheme.typography.labelSmall)
+                                    Slider(
+                                        value = currentClip.startMs.toFloat(),
+                                        onValueChange = { value ->
+                                            val updated = projects.toMutableList()
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(startMs = value.toLong().coerceAtMost(currentClip.endMs - 100L))
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                        },
+                                        onValueChangeFinished = { saveProjects(projects) },
+                                        valueRange = 0f..(currentClip.endMs - 100L).coerceAtLeast(1L).toFloat()
+                                    )
+                                    Text("Out point", style = MaterialTheme.typography.labelSmall)
+                                    Slider(
+                                        value = currentClip.endMs.toFloat(),
+                                        onValueChange = { value ->
+                                            val updated = projects.toMutableList()
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(endMs = value.toLong().coerceAtLeast(currentClip.startMs + 100L))
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                        },
+                                        onValueChangeFinished = { saveProjects(projects) },
+                                        valueRange = (currentClip.startMs + 100L).toFloat()..duration.toFloat()
+                                    )
+                                    Button(onClick = {
+                                        exportStatus = "Exporting selected clip…"
+                                        try {
+                                            Exporter.export(this@MainActivity, currentClip.uri, currentClip.startMs, currentClip.endMs) {
+                                                exportStatus = it
+                                            }
+                                        } catch (e: Exception) { exportStatus = "Export failed: ${e.message}" }
+                                    }) { Text("Export selected clip") }
+                                    if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                             Spacer(Modifier.height(12.dp))
                             Text("Timeline (starter)", fontWeight = FontWeight.Bold)
@@ -138,7 +182,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            Text("V0.1 foundation: trim, drag, split, compositing and export are not implemented yet.", style = MaterialTheme.typography.bodySmall)
+                            Text("V0.2: trim and export one selected video. Multitrack compositing, ripple edits, and splitting are not ready yet.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     if (newDialog) {
@@ -174,6 +218,14 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    private fun getDuration(uri: Uri): Long = try {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(this, uri)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        } finally { retriever.release() }
+    } catch (_: Exception) { 0L }
+
     private fun loadProjects(): List<Project> = try {
         val arr = JSONArray(prefs.getString("data", "[]"))
         (0 until arr.length()).map { i ->
@@ -181,7 +233,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"))
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L))
             })
         }
     } catch (_: Exception) { emptyList() }
@@ -190,7 +242,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track)) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs)) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("clips", clips))
         }
         prefs.edit().putString("data", arr.toString()).apply()
@@ -206,18 +258,18 @@ class MainActivity : ComponentActivity() {
             val data = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
             val remote = data.optString("tag_name")
             if (remote.isBlank()) "No version information available."
-            else if (remote == "v0.1.0-alpha") "You're on the latest release."
+            else if (remote == "v0.2.0-alpha") "You're on the latest release."
             else "Latest release: $remote. Tap Open latest release to review and download."
         }
     } catch (e: Exception) { "Update check unavailable: ${e.localizedMessage ?: "network error"}" }
 }
 
 @Composable
-private fun VideoPreview(source: String) {
+private fun VideoPreview(source: String, startMs: Long, endMs: Long) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val player = remember(source) {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(Uri.parse(source)))
+            setMediaItem(MediaItem.Builder().setUri(Uri.parse(source)).setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setStartPositionMs(startMs).setEndPositionMs(endMs).build()).build())
             prepare()
         }
     }
