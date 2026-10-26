@@ -55,7 +55,9 @@ jobs:
             echo "::error::Release $TAG exists. Increase versionCode/versionName before publishing."
             exit 1
           fi
-          gh release create "$TAG" app/build/outputs/apk/release/*.apk --target "$GITHUB_SHA" --title "$TAG" --generate-notes --prerelease
+          VERSION_CODE="$(grep -oE 'versionCode = [0-9]+' app/build.gradle.kts | head -n 1 | awk '{print $3}')"
+          printf "versionCode: %s\\n\\nSigned Android APK.\\n" "$VERSION_CODE" > "$RUNNER_TEMP/release-notes.md"
+          gh release create "$TAG" app/build/outputs/apk/release/*.apk --target "$GITHUB_SHA" --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md" --prerelease
       - uses: actions/upload-artifact@v4
         with:
           name: shorts-creator-signed-release
