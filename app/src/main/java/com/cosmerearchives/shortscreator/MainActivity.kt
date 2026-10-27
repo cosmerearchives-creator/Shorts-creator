@@ -201,7 +201,17 @@ class MainActivity : ComponentActivity() {
                                 selectedIndex = activeClip,
                                 playheadMs = playheadMs,
                                 onSelect = { i -> activeClip = i; playheadMs = 0L },
-                                onScrub = { time -> playheadMs = time }
+                                onScrub = { time -> playheadMs = time },
+                                onMove = { index, position ->
+                                    val cs = projects[selected].clips.toMutableList()
+                                    if (index in cs.indices && cs[index].track != 0) {
+                                        cs[index] = cs[index].copy(positionMs = position)
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = projects[selected].copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }
+                                }
                             )
                             if (currentClip != null && currentClip.track != 0) {
                                 Text("Overlay position: ${currentClip.positionMs / 1000.0}s", style = MaterialTheme.typography.bodySmall)
