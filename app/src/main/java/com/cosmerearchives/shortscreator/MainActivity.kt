@@ -55,6 +55,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
+import kotlinx.coroutines.launch
 
 private val ivory = Color(0xFFF5F4EF)
 private val lavender = Color(0xFFEFE9F5)
@@ -817,9 +818,12 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
     var beforeSeconds by remember(item.uri) { mutableFloatStateOf(2f) }
     var afterSeconds by remember(item.uri) { mutableFloatStateOf(2f) }
     var selectedMatch by remember(item.uri) { mutableIntStateOf(-1) }
+    var scanningSpeech by remember(item.uri) { mutableStateOf(false) }
+    val speechScope = rememberCoroutineScope()
+    val recognizer = remember(context) { NativeWhisper(context) }
     LaunchedEffect(item.uri) {
         transcriptWords = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            TranscriptCache(context).load(TranscriptCache(context).sourceKey(Uri.parse(item.uri), "whisper-tiny.en-v1"))
+            TranscriptCache(context).load(TranscriptCache(context).sourceKey(Uri.parse(item.uri), recognizer.modelId))
         }
         if (transcriptWords != null) speechStatus = "Cached transcript loaded"
     }
@@ -935,9 +939,31 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                     HorizontalDivider()
                     Text("Search & Trim", fontWeight = FontWeight.SemiBold)
                     Text(speechStatus, style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick = {
-                        speechStatus = "Speech scanning requires the offline Whisper engine, which is not yet installed in this build."
-                    }) { Text("Scan speech") }
+                    OutlinedButton(enabled = !scanningSpeech, onClick = {
+                        scanningSpeech = true
+                        speechScope.launch {
+                            try {
+                                if (!recognizer.hasModel()) {
+                                    speechStatus = "Downloading offline English model…"
+                                    recognizer.installModel { progress ->
+                                        speechStatus = "Downloading model: ${(progress * 100).toInt()}%"
+                                    }
+                                }
+                                speechStatus = "Scanning speech (may take several minutes)…"
+                                val words = recognizer.transcribe(Uri.parse(item.uri)) { progress ->
+                                    speechStatus = "Processing: ${(progress * 100).toInt()}%"
+                                }
+                                transcriptWords = words
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    val cache = TranscriptCache(context)
+                                    cache.save(cache.sourceKey(Uri.parse(item.uri), recognizer.modelId), words)
+                                }
+                                speechStatus = "Scan complete: ${words.size} timed words"
+                            } catch (error: Exception) {
+                                speechStatus = "Speech scan failed: ${error.message ?: "Unknown error"}"
+                            } finally { scanningSpeech = false }
+                        }
+                    }) { Text(if (scanningSpeech) "Scanning…" else if (recognizer.hasModel()) "Scan speech" else "Download model & scan") }
                     if (transcriptWords != null) {
                         OutlinedTextField(
                             value = speechQuery,
