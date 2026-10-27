@@ -4,6 +4,13 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.media.MediaMetadataRetriever
+import android.media.MediaExtractor
+import android.media.MediaCodec
+import android.media.MediaFormat
+import java.nio.ByteOrder
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Canvas
@@ -638,6 +645,14 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
             } catch (_: Exception) { emptyList() } finally { retriever.release() }
         }
     }
+    var waveform by remember(item.uri) { mutableStateOf<List<Float>>(emptyList()) }
+    LaunchedEffect(item.uri) {
+        if (item.kind == "audio") {
+            waveform = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                extractAudioPeaks(context, Uri.parse(item.uri))
+            }
+        }
+    }
     var rangePlaying by remember(item.uri) { mutableStateOf(false) }
     LaunchedEffect(player, rangePlaying, endMs) {
         while (rangePlaying && player != null) {
@@ -679,7 +694,54 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                 }
                 if (item.kind == "audio" && duration > 0L) {
                     Text("Audio range", style = MaterialTheme.typography.labelMedium)
-                    Text("Waveform extraction is not yet implemented. Use playback and in/out controls for precision.", style = MaterialTheme.typography.bodySmall)
+                    if (waveform.isNotEmpty()) {
+                        Canvas(Modifier.fillMaxWidth().height(55.dp)) {
+                            val step = size.width / waveform.size
+                            waveform.forEachIndexed { index, peak ->
+                                val x = index * step
+                                val half = (peak.coerceIn(0f, 1f) * size.height * 0.48f).coerceAtLeast(1f)
+                                drawLine(Color(0xFF685B86), Offset(x, size.height / 2f - half),
+                                    Offset(x, size.height / 2f + half), strokeWidth = step.coerceAtLeast(1f))
+                            }
+                        }
+                    } else {
+                        Text("Waveform unavailable for this file; trim using playback.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (item.kind != "image" && duration > 0L) {
+                    var stripWidth by remember { mutableIntStateOf(0) }
+                    Box(Modifier.fillMaxWidth().height(34.dp).background(lavender, RoundedCornerShape(5.dp))
+                        .onSizeChanged { stripWidth = it.width }) {
+                        val startFraction = startMs.toFloat() / duration
+                        val endFraction = endMs.toFloat() / duration
+                        Box(Modifier.fillMaxHeight().width(12.dp)
+                            .offset { androidx.compose.ui.unit.IntOffset((stripWidth * startFraction).toInt() - 6, 0) }
+                            .background(purple, RoundedCornerShape(3.dp))
+                            .pointerInput(stripWidth, duration) {
+                                detectDragGestures { change, delta ->
+                                    change.consume()
+                                    if (stripWidth > 0) {
+                                        startMs = (startMs + (delta.x / stripWidth * duration).toLong())
+                                            .coerceIn(0L, (endMs - 100L).coerceAtLeast(0L))
+                                        player?.seekTo(startMs)
+                                    }
+                                }
+                            })
+                        Box(Modifier.fillMaxHeight().width(12.dp)
+                            .offset { androidx.compose.ui.unit.IntOffset((stripWidth * endFraction).toInt() - 6, 0) }
+                            .background(purple, RoundedCornerShape(3.dp))
+                            .pointerInput(stripWidth, duration) {
+                                detectDragGestures { change, delta ->
+                                    change.consume()
+                                    if (stripWidth > 0) {
+                                        endMs = (endMs + (delta.x / stripWidth * duration).toLong())
+                                            .coerceIn((startMs + 100L).coerceAtMost(duration), duration)
+                                        player?.seekTo(endMs.coerceAtLeast(1L) - 1L)
+                                    }
+                                }
+                            })
+                    }
+                    Text("Drag purple handles to change in/out points.", style = MaterialTheme.typography.bodySmall)
                 }
                 if (item.kind != "image" && duration > 0L && player != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -731,4 +793,70 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
+}
+
+private fun extractAudioPeaks(context: android.content.Context, uri: Uri): List<Float> {
+    val extractor = MediaExtractor()
+    try {
+        extractor.setDataSource(context, uri, null)
+        val index = (0 until extractor.trackCount).firstOrNull {
+            extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
+        } ?: return emptyList()
+        extractor.selectTrack(index)
+        val format = extractor.getTrackFormat(index)
+        val mime = format.getString(MediaFormat.KEY_MIME) ?: return emptyList()
+        val codec = MediaCodec.createDecoderByType(mime)
+        try {
+            codec.configure(format, null, null, 0)
+            codec.start()
+            val info = MediaCodec.BufferInfo()
+            val peaks = FloatArray(96)
+            var samplesSeen = 0L
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
+            var inputDone = false
+            var outputDone = false
+            var iterations = 0
+            while (!outputDone && iterations++ < 25000) {
+                if (!inputDone) {
+                    val inputIndex = codec.dequeueInputBuffer(10000)
+                    if (inputIndex >= 0) {
+                        val buffer = codec.getInputBuffer(inputIndex)!!
+                        buffer.clear()
+                        val size = extractor.readSampleData(buffer, 0)
+                        if (size < 0) {
+                            codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            inputDone = true
+                        } else {
+                            codec.queueInputBuffer(inputIndex, 0, size, extractor.sampleTime, 0)
+                            extractor.advance()
+                        }
+                    }
+                }
+                val outputIndex = codec.dequeueOutputBuffer(info, 10000)
+                if (outputIndex >= 0) {
+                    if (info.size > 0 && durationUs > 0) {
+                        val buffer = codec.getOutputBuffer(outputIndex)!!
+                        buffer.position(info.offset)
+                        buffer.limit(info.offset + info.size)
+                        val slice = buffer.slice().order(ByteOrder.LITTLE_ENDIAN)
+                        val bin = ((info.presentationTimeUs.toDouble() / durationUs) * peaks.size).toInt().coerceIn(0, peaks.lastIndex)
+                        var maximum = peaks[bin]
+                        while (slice.remaining() >= 2) {
+                            val amplitude = kotlin.math.abs(slice.short.toInt()) / 32768f
+                            if (amplitude > maximum) maximum = amplitude
+                            samplesSeen++
+                        }
+                        peaks[bin] = maximum
+                    }
+                    codec.releaseOutputBuffer(outputIndex, false)
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
+                }
+            }
+            return if (samplesSeen > 0) peaks.toList() else emptyList()
+        } finally {
+            codec.stop()
+            codec.release()
+        }
+    } catch (_: Exception) { return emptyList() }
+    finally { extractor.release() }
 }
