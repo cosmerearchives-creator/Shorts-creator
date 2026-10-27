@@ -1,6 +1,10 @@
 package com.cosmerearchives.shortscreator
 
 import android.content.ContentValues
+import android.graphics.BitmapFactory
+import androidx.media3.effect.BitmapOverlay
+import androidx.media3.effect.OverlayEffect
+import androidx.media3.transformer.Effects
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -25,11 +29,24 @@ object Exporter {
             "Timeline export currently supports trimmed video clips on the main track only"
         }
         val output = File(context.cacheDir, "timeline-${System.currentTimeMillis()}.mp4")
+        val visualOverlays = clips.filter { it.track == 1 }
+        require(visualOverlays.all { it.kind == "image" }) {
+            "Video overlays are not supported in exports yet"
+        }
+        require(visualOverlays.size <= 1) { "Only one image overlay can be exported in V0.8" }
+        val bitmap = visualOverlays.singleOrNull()?.let { item ->
+            context.contentResolver.openInputStream(Uri.parse(item.uri))?.use { stream ->
+                BitmapFactory.decodeStream(stream)
+            } ?: error("Unable to open image overlay")
+        }
+        val visualEffects = if (bitmap != null)
+            listOf(OverlayEffect(listOf(BitmapOverlay.createStaticBitmapOverlay(bitmap))))
+        else emptyList()
         val edits = main.map { clip ->
             val media = MediaItem.Builder().setUri(Uri.parse(clip.uri))
                 .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                     .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
-            EditedMediaItem.Builder(media).build()
+            EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), visualEffects)).build()
         }
         val mainSequence = EditedMediaItemSequence.withAudioAndVideoFrom(edits)
         val audio = clips.filter { it.track == 2 && it.kind == "audio" }
