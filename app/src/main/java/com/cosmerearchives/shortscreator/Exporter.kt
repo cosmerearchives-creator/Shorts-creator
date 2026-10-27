@@ -49,8 +49,8 @@ object Exporter {
             val bitmap = Bitmap.createBitmap(1024, 192, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = AndroidColor.WHITE
-                textSize = 62f
+                color = item.textColor
+                textSize = item.textSize
                 textAlign = Paint.Align.CENTER
                 setShadowLayer(5f, 2f, 3f, AndroidColor.BLACK)
             }
@@ -83,6 +83,7 @@ object Exporter {
                         val visible = timeMs >= image.positionMs && timeMs < image.positionMs + image.endMs.coerceAtLeast(5000L)
                         return StaticOverlaySettings.Builder()
                             .setAlphaScale(if (visible) 1f else 0f)
+                            .setBackgroundFrameAnchor(if (image.kind == "text") image.textX else 0f, if (image.kind == "text") image.textY else 0f)
                             .build()
                     }
                 }
