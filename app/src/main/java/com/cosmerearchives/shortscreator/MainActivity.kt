@@ -815,6 +815,8 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
     var speechQuery by remember(item.uri) { mutableStateOf("") }
     var transcriptWords by remember(item.uri) { mutableStateOf<List<SpokenWord>?>(null) }
     var speechStatus by remember(item.uri) { mutableStateOf("Not scanned") }
+    var speechError by remember(item.uri) { mutableStateOf(false) }
+    var showTranscript by remember(item.uri) { mutableStateOf(false) }
     var beforeSeconds by remember(item.uri) { mutableFloatStateOf(2f) }
     var afterSeconds by remember(item.uri) { mutableFloatStateOf(2f) }
     var selectedMatch by remember(item.uri) { mutableIntStateOf(-1) }
@@ -825,7 +827,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
         transcriptWords = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             TranscriptCache(context).load(TranscriptCache(context).sourceKey(Uri.parse(item.uri), recognizer.modelId))
         }
-        if (transcriptWords != null) speechStatus = "Cached transcript loaded"
+        if (transcriptWords != null) speechStatus = "Cached transcript loaded: ${transcriptWords!!.size} timed words"
     }
     val speechMatches = remember(transcriptWords, speechQuery) {
         SpeechSearch.find(transcriptWords.orEmpty(), speechQuery)
@@ -938,9 +940,16 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                 if (item.kind != "image" && duration > 0L) {
                     HorizontalDivider()
                     Text("Search & Trim", fontWeight = FontWeight.SemiBold)
-                    Text(speechStatus, style = MaterialTheme.typography.bodySmall)
+                    Text(speechStatus, style = MaterialTheme.typography.bodySmall,
+                        color = if (speechError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                    if (scanningSpeech) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    if (transcriptWords != null && transcriptWords!!.isEmpty()) {
+                        Text("No timestamped words recognized. Try a clearer spoken clip or scan again.",
+                            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
                     OutlinedButton(enabled = !scanningSpeech, onClick = {
                         scanningSpeech = true
+                        speechError = false
                         speechScope.launch {
                             try {
                                 if (!recognizer.hasModel()) {
@@ -949,7 +958,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                                         speechStatus = "Downloading model: ${(progress * 100).toInt()}%"
                                     }
                                 }
-                                speechStatus = "Scanning speech (may take several minutes)…"
+                                speechStatus = "Preparing audio for speech recognition…"
                                 val words = recognizer.transcribe(Uri.parse(item.uri)) { progress ->
                                     speechStatus = "Processing: ${(progress * 100).toInt()}%"
                                 }
@@ -958,8 +967,11 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                                     val cache = TranscriptCache(context)
                                     cache.save(cache.sourceKey(Uri.parse(item.uri), recognizer.modelId), words)
                                 }
-                                speechStatus = "Scan complete: ${words.size} timed words"
+                                speechStatus = if (words.isEmpty())
+                                    "Scan finished but no timestamped speech was recognized."
+                                else "Scan complete: ${words.size} words. Search below or view transcript."
                             } catch (error: Exception) {
+                                speechError = true
                                 speechStatus = "Speech scan failed: ${error.message ?: "Unknown error"}"
                             } finally { scanningSpeech = false }
                         }
@@ -972,7 +984,24 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Text("${speechMatches.size} matches", style = MaterialTheme.typography.bodySmall)
+                        Text(when {
+                            speechQuery.isBlank() -> "Enter a word or phrase to search."
+                            transcriptWords!!.isEmpty() -> "No speech was recognized to search."
+                            speechMatches.isEmpty() -> "No matches for your phrase among ${transcriptWords!!.size} recognized words."
+                            else -> "${speechMatches.size} matching occurrence(s) found."
+                        }, style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { showTranscript = !showTranscript }) {
+                            Text(if (showTranscript) "Hide recognized transcript" else "View recognized transcript")
+                        }
+                        if (showTranscript) {
+                            val previewText = transcriptWords!!.take(300).joinToString(" ") { it.text }
+                            androidx.compose.foundation.text.selection.SelectionContainer {
+                                Text(if (previewText.isBlank()) "(No recognized speech)" else previewText,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (transcriptWords!!.size > 300)
+                                Text("Showing the first 300 words.", style = MaterialTheme.typography.bodySmall)
+                        }
                         speechMatches.take(25).forEachIndexed { index, match ->
                             TextButton(onClick = {
                                 selectedMatch = index
