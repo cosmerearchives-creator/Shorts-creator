@@ -1,2 +1,2 @@
-Release request: v0.8.0-alpha
-Version code 9. First static image overlay export.
+Release request: v0.9.0-alpha
+Version code 10. Timed multiple image overlays and timeline scrubbing.
