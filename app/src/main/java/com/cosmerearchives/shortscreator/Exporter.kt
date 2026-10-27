@@ -15,6 +15,8 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.VideoCompositorSettings
+import androidx.media3.common.util.Size
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
@@ -33,10 +35,8 @@ object Exporter {
         }
         val output = File(context.cacheDir, "timeline-${System.currentTimeMillis()}.mp4")
         val visualOverlays = clips.filter { it.track == 1 }
-        require(visualOverlays.all { it.kind == "image" }) {
-            "Video overlays are not supported in exports yet"
-        }
-        val images = visualOverlays.map { item ->
+        require(visualOverlays.all { it.kind == "image" || it.kind == "video" }) { "Unsupported visual overlay" }
+        val images = visualOverlays.filter { it.kind == "image" }.map { item ->
             val bitmap = context.contentResolver.openInputStream(Uri.parse(item.uri))?.use {
                 BitmapFactory.decodeStream(it)
             } ?: error("Unable to open overlay image")
@@ -77,7 +77,30 @@ object Exporter {
             builder.addItem(EditedMediaItem.Builder(item).build())
             sequences.add(builder.build())
         }
-        val composition = Composition.Builder(sequences).build()
+        val pipVideos = visualOverlays.filter { it.kind == "video" }
+        pipVideos.forEach { clip ->
+            require(clip.endMs > clip.startMs) { "Video overlay has no valid duration" }
+            val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
+            if (clip.positionMs > 0L) builder.addGap(clip.positionMs * 1000L)
+            val media = MediaItem.Builder().setUri(Uri.parse(clip.uri))
+                .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
+            builder.addItem(EditedMediaItem.Builder(media).setRemoveAudio(true).build())
+            sequences.add(builder.build())
+        }
+        val pipStart = sequences.size - pipVideos.size
+        val compositor = object : VideoCompositorSettings {
+            override fun getOutputSize(inputSizes: List<Size>): Size = inputSizes.first()
+            override fun getOverlaySettings(inputId: Int, presentationTimeUs: Long): androidx.media3.common.OverlaySettings =
+                if (inputId >= pipStart && pipVideos.isNotEmpty()) {
+                    StaticOverlaySettings.Builder()
+                        .setScale(0.35f, 0.35f)
+                        .setOverlayFrameAnchor(0f, 0f)
+                        .setBackgroundFrameAnchor(0.55f, 0.55f)
+                        .build()
+                } else StaticOverlaySettings.Builder().build()
+        }
+        val composition = Composition.Builder(sequences).setVideoCompositorSettings(compositor).build()
         startExport(context, output, callback) { transformer -> transformer.start(composition, output.absolutePath) }
     }
 
