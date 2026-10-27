@@ -227,7 +227,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) { Text("Export timeline with picture-in-picture") }
                             if (overlayClips.isNotEmpty()) Text(
-                                "Note: V0.10 exports video overlays as small picture-in-picture windows in the upper right. Positioning is fixed for now.",
+                                "Note: V0.10 exports video overlays as small picture-in-picture windows in the upper right. Select a video overlay to adjust its size and position.",
                                 style = MaterialTheme.typography.bodySmall, color = Color(0xFF8D4738)
                             )
                             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
@@ -248,6 +248,25 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
+                            if (currentClip?.kind == "video" && currentClip.track == 1) {
+                                Text("PiP size: ${(currentClip.pipScale * 100).toInt()}%")
+                                listOf("Size", "Horizontal", "Vertical").forEachIndexed { i, title ->
+                                    val value = when(i) { 0 -> currentClip.pipScale; 1 -> currentClip.pipX; else -> currentClip.pipY }
+                                    Text(title)
+                                    Slider(value = value, valueRange = if (i == 0) 0.15f..0.75f else -0.9f..0.9f,
+                                        onValueChange = { v ->
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = when(i) {
+                                                0 -> currentClip.copy(pipScale = v)
+                                                1 -> currentClip.copy(pipX = v)
+                                                else -> currentClip.copy(pipY = v)
+                                            }
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                        }, onValueChangeFinished = { saveProjects(projects) })
+                                }
+                            }
                             if (currentClip?.kind == "image" && currentClip.track == 1) {
                                 Text("Image duration: ${currentClip.endMs / 1000.0}s")
                                 Slider(
