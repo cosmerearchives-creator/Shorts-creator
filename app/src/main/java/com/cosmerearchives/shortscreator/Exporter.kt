@@ -94,9 +94,9 @@ object Exporter {
             override fun getOverlaySettings(inputId: Int, presentationTimeUs: Long): androidx.media3.common.OverlaySettings =
                 if (inputId >= pipStart && pipVideos.isNotEmpty()) {
                     StaticOverlaySettings.Builder()
-                        .setScale(0.35f, 0.35f)
+                        .setScale(pipVideos[inputId - pipStart].pipScale, pipVideos[inputId - pipStart].pipScale)
                         .setOverlayFrameAnchor(0f, 0f)
-                        .setBackgroundFrameAnchor(0.55f, 0.55f)
+                        .setBackgroundFrameAnchor(pipVideos[inputId - pipStart].pipX, pipVideos[inputId - pipStart].pipY)
                         .build()
                 } else StaticOverlaySettings.Builder().build()
         }
