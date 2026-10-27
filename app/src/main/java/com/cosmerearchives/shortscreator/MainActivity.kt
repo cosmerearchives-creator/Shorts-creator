@@ -347,7 +347,7 @@ class MainActivity : ComponentActivity() {
                                     Button(onClick = {
                                         exportStatus = "Exporting selected clip…"
                                         try {
-                                            Exporter.export(this@MainActivity, currentClip.uri, currentClip.startMs, currentClip.endMs) {
+                                            Exporter.export(this@MainActivity, currentClip.uri, currentClip.startMs, currentClip.endMs, project.ratio) {
                                                 exportStatus = it
                                             }
                                         } catch (e: Exception) { exportStatus = "Export failed: ${e.message}" }
@@ -364,7 +364,7 @@ class MainActivity : ComponentActivity() {
                                 onClick = {
                                     exportStatus = "Exporting main timeline…"
                                     try {
-                                        Exporter.exportTimeline(this@MainActivity, project.clips) { status ->
+                                        Exporter.exportTimeline(this@MainActivity, project.clips, project.ratio) { status ->
                                             runOnUiThread { exportStatus = status }
                                         }
                                     } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
