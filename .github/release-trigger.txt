@@ -1,0 +1,2 @@
+Release request: v0.4.0-alpha
+Signed release build for versionCode 4.
