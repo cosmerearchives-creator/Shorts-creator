@@ -1,2 +1,2 @@
-Release request: v0.35.0-alpha
-Version code 36 - fixed Kotlin Dialog brace and retry signed APK build
+Release request: v0.36.0-alpha
+Version code 37 - prevent long audio waveform overload and reject oversized speech scans before decoding
