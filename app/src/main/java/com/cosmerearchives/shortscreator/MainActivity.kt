@@ -61,7 +61,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f)
 data class PendingImport(val uri: String, val kind: String, val track: Int, val durationMs: Long)
 data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList())
 
@@ -232,8 +232,32 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     } catch (_: Exception) { null }
                                                 }
-                                                if (bitmap != null) Image(bitmap, "Image overlay",
-                                                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.7f).height(150.dp))
+                                                if (bitmap != null) {
+                                                    val dx = (overlay.imageX * previewSize.width / 2f).toInt()
+                                                    val dy = (-overlay.imageY * previewSize.height / 2f).toInt()
+                                                    Image(bitmap, "Image overlay",
+                                                        modifier = Modifier.align(Alignment.Center)
+                                                            .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
+                                                            .fillMaxWidth(0.7f).height(150.dp)
+                                                            .pointerInput(clipIndex, previewSize) {
+                                                                detectDragGestures { change, drag ->
+                                                                    change.consume()
+                                                                    if (previewSize.width > 0 && previewSize.height > 0) {
+                                                                        val cs = projects[selected].clips.toMutableList()
+                                                                        val item = cs.getOrNull(clipIndex)
+                                                                        if (item != null && item.kind == "image") {
+                                                                            cs[clipIndex] = item.copy(
+                                                                                imageX = (item.imageX + 2f * drag.x / previewSize.width).coerceIn(-0.9f, 0.9f),
+                                                                                imageY = (item.imageY - 2f * drag.y / previewSize.height).coerceIn(-0.9f, 0.9f))
+                                                                            val updated = projects.toMutableList()
+                                                                            updated[selected] = projects[selected].copy(clips = cs)
+                                                                            projects = updated
+                                                                            saveProjects(updated)
+                                                                        }
+                                                                    }
+                                                                }
+                                                            })
+                                                }
                                             }
                                             "video" -> {
                                                 val pipTime = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
@@ -270,7 +294,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                            Text("Preview shows overlays at the playhead. Drag captions and PiP video to reposition; select PiP to resize with its slider.",
+                            Text("Preview shows overlays at the playhead. Drag captions, images and PiP video to reposition; select PiP to resize with its slider.",
                                 style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -649,7 +673,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat())
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat())
             })
         }
     } catch (_: Exception) { emptyList() }
@@ -658,7 +682,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble())) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble())) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("clips", clips))
         }
         prefs.edit().putString("data", arr.toString()).apply()
