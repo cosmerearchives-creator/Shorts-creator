@@ -229,12 +229,11 @@ class MainActivity : ComponentActivity() {
                                                         })
                                             }
                                             "image" -> {
-                                                val bitmap = remember(overlay.uri) {
-                                                    try {
-                                                        frameContext.contentResolver.openInputStream(Uri.parse(overlay.uri))?.use {
-                                                            BitmapFactory.decodeStream(it)?.asImageBitmap()
-                                                        }
-                                                    } catch (_: Exception) { null }
+                                                var bitmap by remember(overlay.uri) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                                                LaunchedEffect(overlay.uri) {
+                                                    bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                        previewImageCache.get(frameContext, Uri.parse(overlay.uri))
+                                                    }
                                                 }
                                                 if (bitmap != null) {
                                                     val dx = (overlay.imageX * previewSize.width / 2f).toInt()
@@ -1067,4 +1066,29 @@ private fun TimelineMediaStrip(
         }
     }
     Text("Drag purple edges to trim this timeline clip.", style = MaterialTheme.typography.bodySmall)
+}
+
+private val previewImageCache = PreviewImageCache()
+
+private class PreviewImageCache {
+    private val cache = object : android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(12) {}
+    @Synchronized
+    fun get(context: android.content.Context, uri: Uri): androidx.compose.ui.graphics.ImageBitmap? {
+        cache.get(uri.toString())?.let { return it }
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+            var sample = 1
+            while (bounds.outWidth / sample > 1080 || bounds.outHeight / sample > 1080) sample *= 2
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            val bitmap = context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, options)
+            } ?: return null
+            bitmap.asImageBitmap().also { cache.put(uri.toString(), it) }
+        } catch (_: Exception) { null }
+    }
 }
