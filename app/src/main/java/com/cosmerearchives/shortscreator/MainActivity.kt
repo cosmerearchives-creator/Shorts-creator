@@ -49,6 +49,7 @@ private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
 data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f)
+data class PendingImport(val uri: String, val kind: String, val track: Int, val durationMs: Long)
 data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList())
 
 class MainActivity : ComponentActivity() {
@@ -67,6 +68,7 @@ class MainActivity : ComponentActivity() {
             var availableUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
             var downloading by remember { mutableStateOf(false) }
             var exportStatus by remember { mutableStateOf("") }
+            var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
             LaunchedEffect(Unit) {
                 thread { try {
                     val found = AppUpdater.latest(this@MainActivity)
@@ -78,12 +80,11 @@ class MainActivity : ComponentActivity() {
                     try {
                         contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     } catch (_: SecurityException) { }
-                    val updated = projects.toMutableList()
-                    val current = updated[selected]
                     val mime = contentResolver.getType(uri).orEmpty()
-                    updated[selected] = current.copy(clips = current.clips + Clip(uri.toString(), if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video", if (mime.startsWith("audio/")) 2 else selectedTrack, 0L, if (mime.startsWith("video/") || mime.startsWith("audio/")) getDuration(uri) else if (mime.startsWith("image/")) 5000L else 0L))
-                    projects = updated
-                    saveProjects(projects)
+                    val kind = if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video"
+                    val duration = if (kind == "image") 5000L else getDuration(uri)
+                    pendingImport = PendingImport(uri.toString(), kind, if (kind == "audio") 2 else selectedTrack, duration)
+
                 }
             }
             MaterialTheme(colorScheme = lightColorScheme(primary = purple, background = ivory, surface = Color.White, onSurface = ink)) {
@@ -507,6 +508,21 @@ class MainActivity : ComponentActivity() {
                             Text("V0.5: scrollable timeline, splitting and clip rearrangement. Full multitrack export remains a later milestone.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
+                    pendingImport?.let { pending ->
+                        ImportReviewDialog(pending,
+                            onCancel = { pendingImport = null },
+                            onConfirm = { start, end ->
+                                if (selected in projects.indices) {
+                                    val updated = projects.toMutableList()
+                                    val project = updated[selected]
+                                    updated[selected] = project.copy(clips = project.clips +
+                                        Clip(pending.uri, pending.kind, pending.track, start, end))
+                                    projects = updated
+                                    saveProjects(updated)
+                                }
+                                pendingImport = null
+                            })
+                    }
                     if (newDialog) {
                         var projectName by remember { mutableStateOf("") }
                         var ratio by remember { mutableStateOf("9:16") }
@@ -585,4 +601,67 @@ private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs:
     LaunchedEffect(player, playheadMs) { player.seekTo(playheadMs.coerceAtLeast(0L)) }
     DisposableEffect(player) { onDispose { player.release() } }
     AndroidView(factory = { ctx -> PlayerView(ctx).apply { this.player = player } }, modifier = modifier.background(dark))
+}
+
+@Composable
+private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConfirm: (Long, Long) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val duration = item.durationMs
+    var startMs by remember(item.uri) { mutableLongStateOf(0L) }
+    var endMs by remember(item.uri) { mutableLongStateOf(duration) }
+    val player = remember(item.uri) {
+        if (item.kind == "image") null else ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(Uri.parse(item.uri)))
+            prepare()
+        }
+    }
+    DisposableEffect(player) { onDispose { player?.release() } }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Preview and trim " + item.kind) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (item.kind == "video" && player != null) {
+                    AndroidView(factory = { ctx -> PlayerView(ctx).apply {
+                        this.player = player
+                        useController = true
+                    } }, modifier = Modifier.fillMaxWidth().height(210.dp).background(dark))
+                } else if (item.kind == "audio" && player != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Audio preview", modifier = Modifier.weight(1f))
+                        TextButton(onClick = { if (player.isPlaying) player.pause() else player.play() }) {
+                            Text(if (player.isPlaying) "Pause" else "Play")
+                        }
+                    }
+                    Text("Use the preview controls to listen, then choose the section to import.")
+                } else {
+                    Text("Image selected (images use a default 5-second duration).")
+                }
+                if (item.kind != "image" && duration > 0L) {
+                    Text("In point: ${"%.2f".format(java.util.Locale.US, startMs / 1000.0)}s")
+                    Slider(value = startMs.toFloat(), valueRange = 0f..duration.toFloat(),
+                        onValueChange = {
+                            startMs = it.toLong().coerceAtMost((endMs - 100L).coerceAtLeast(0L))
+                            player?.seekTo(startMs)
+                        })
+                    Text("Out point: ${"%.2f".format(java.util.Locale.US, endMs / 1000.0)}s")
+                    Slider(value = endMs.toFloat(), valueRange = 0f..duration.toFloat(),
+                        onValueChange = {
+                            endMs = it.toLong().coerceAtLeast((startMs + 100L).coerceAtMost(duration))
+                            player?.seekTo((endMs - 500L).coerceAtLeast(startMs))
+                        })
+                    Text("Importing ${"%.2f".format(java.util.Locale.US, (endMs - startMs) / 1000.0)} seconds")
+                } else if (duration <= 0L && item.kind != "image") {
+                    Text("Duration unavailable. This file cannot be trimmed yet.")
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { player?.pause(); onConfirm(startMs, endMs) },
+                enabled = item.kind == "image" || (duration > 0L && endMs > startMs)) {
+                Text("Import trimmed clip")
+            }
+        },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
+    )
 }
