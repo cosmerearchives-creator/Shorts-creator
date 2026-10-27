@@ -1,2 +1,2 @@
-Release request: v0.30.0-alpha
-Version code 31 - export cleanup
+Release request: v0.31.0-alpha
+Version code 32 - correct project aspect ratio on export
