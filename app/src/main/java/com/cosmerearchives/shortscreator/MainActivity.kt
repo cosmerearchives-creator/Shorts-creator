@@ -966,8 +966,6 @@ private fun extractAudioPeaks(context: android.content.Context, uri: Uri): List<
             var inputDone = false
             var outputDone = false
             var iterations = 0
-            // Limit decoding of very long recordings to avoid prolonged CPU use.
-            val analysisLimitUs = 180L * 1000000L
             while (!outputDone && iterations++ < 25000) {
                 if (Thread.currentThread().isInterrupted) break
                 if (!inputDone) {
@@ -975,7 +973,6 @@ private fun extractAudioPeaks(context: android.content.Context, uri: Uri): List<
                     if (inputIndex >= 0) {
                         val buffer = codec.getInputBuffer(inputIndex)!!
                         buffer.clear()
-                        if (extractor.sampleTime > analysisLimitUs) break
                         val size = extractor.readSampleData(buffer, 0)
                         if (size < 0) {
                             codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
