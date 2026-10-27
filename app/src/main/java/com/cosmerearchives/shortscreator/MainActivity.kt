@@ -103,6 +103,18 @@ class MainActivity : ComponentActivity() {
             var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
             var libraryItems by remember { mutableStateOf(readLibrary(this@MainActivity)) }
             var showLibrary by remember { mutableStateOf(false) }
+            var librarySpeechQuery by remember { mutableStateOf("") }
+            var libraryResults by remember { mutableStateOf<Map<String, List<SpeechMatch>>>(emptyMap()) }
+            LaunchedEffect(libraryItems, librarySpeechQuery, showLibrary) {
+                libraryResults = if (!showLibrary || librarySpeechQuery.isBlank()) emptyMap() else
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        val cache = TranscriptCache(this@MainActivity)
+                        libraryItems.filter { it.kind != "image" }.associate { item ->
+                            val words = cache.load(cache.sourceKey(Uri.parse(item.uri), "ggml-tiny.en-v1")).orEmpty()
+                            item.uri to SpeechSearch.find(words, librarySpeechQuery).take(10)
+                        }
+                    }
+            }
             LaunchedEffect(Unit) {
                 thread { try {
                     val found = AppUpdater.latest(this@MainActivity)
@@ -129,6 +141,7 @@ class MainActivity : ComponentActivity() {
                                 IconButton(onClick = { selected = -1; showSettings = false }) { Icon(Icons.Default.ArrowBack, "Back") }
                             }
                             Text("Shorts Creator", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { showLibrary = true; showSettings = false }) { Text("Library") }
                             IconButton(onClick = { showSettings = !showSettings; selected = -1 }) { Icon(Icons.Default.Settings, "Settings") }
                         }
                         Spacer(Modifier.height(12.dp))
@@ -643,13 +656,32 @@ class MainActivity : ComponentActivity() {
                                 }
                                 Text("Imported media stays in your library. Choose Add to timeline when you're ready.",
                                     style = MaterialTheme.typography.bodySmall)
+                                OutlinedTextField(
+                                    value = librarySpeechQuery,
+                                    onValueChange = { librarySpeechQuery = it },
+                                    label = { Text("Search spoken words across library") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
                                 if (libraryItems.isEmpty()) Text("Your library is empty. Import a file to get started.")
+                                if (librarySpeechQuery.isNotBlank())
+                                    Text("${libraryResults.values.sumOf { it.size }} matching phrase(s)",
+                                        style = MaterialTheme.typography.bodySmall)
                                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     libraryItems.forEachIndexed { index, item ->
+                                        val matches = libraryResults[item.uri].orEmpty()
+                                        if (librarySpeechQuery.isBlank() || matches.isNotEmpty()) {
                                         ElevatedCard(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 Text(item.kind.uppercase(), style = MaterialTheme.typography.labelSmall)
+                                                if (matches.isNotEmpty()) {
+                                                    Text("${matches.size} matching occurrence(s)", style = MaterialTheme.typography.bodySmall)
+                                                    TextButton(onClick = {
+                                                        pendingImport = PendingImport(item.uri, item.kind, selectedTrack,
+                                                            getDuration(Uri.parse(item.uri)))
+                                                    }) { Text("Open searchable transcript") }
+                                                }
                                                 Text(Uri.parse(item.uri).lastPathSegment ?: "Media file", maxLines = 2)
                                                 Text("Selection: ${"%.1f".format(item.startMs / 1000.0)}s – ${"%.1f".format(item.endMs / 1000.0)}s",
                                                     style = MaterialTheme.typography.bodySmall)
@@ -678,6 +710,7 @@ class MainActivity : ComponentActivity() {
                                                     }) { Text("Remove") }
                                                 }
                                             }
+                                        }
                                         }
                                     }
                                 }
