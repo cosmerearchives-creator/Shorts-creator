@@ -150,6 +150,7 @@ object Exporter {
         val transformer = Transformer.Builder(context)
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                    var destination: Uri? = null
                     try {
                         val resolver = context.contentResolver
                         val values = ContentValues().apply {
@@ -160,6 +161,7 @@ object Exporter {
                         }
                         val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
                             ?: error("Unable to create video destination")
+                        destination = uri
                         resolver.openOutputStream(uri)?.use { sink ->
                             output.inputStream().use { it.copyTo(sink) }
                         } ?: error("Unable to write output video")
@@ -170,6 +172,9 @@ object Exporter {
                         }
                         callback("Export saved to Movies/ShortsCreator")
                     } catch (e: Exception) {
+                        destination?.let { failedUri ->
+                            try { context.contentResolver.delete(failedUri, null, null) } catch (_: Exception) { }
+                        }
                         callback("Export completed, but saving failed: ${e.message}")
                     } finally { output.delete() }
                 }
@@ -178,6 +183,11 @@ object Exporter {
                     callback("Export failed: ${exportException.message}")
                 }
             }).build()
-        start(transformer)
+        try {
+            start(transformer)
+        } catch (e: Exception) {
+            output.delete()
+            callback("Export could not start: ${e.message}")
+        }
     }
 }
