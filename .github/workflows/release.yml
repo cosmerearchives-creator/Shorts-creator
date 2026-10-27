@@ -40,6 +40,11 @@ jobs:
         run: |
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | head -n 1)"
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+      - name: Fetch pinned Whisper native sources
+        run: |
+          mkdir -p vendor
+          git clone --depth 1 --branch v1.7.6 https://github.com/ggml-org/whisper.cpp.git vendor/whisper.cpp
+          git -C vendor/whisper.cpp submodule update --init --depth 1
       - name: Decode signing key
         run: |
           echo "$SHORTS_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/shorts-stable.jks"
