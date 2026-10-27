@@ -136,7 +136,7 @@ class MainActivity : ComponentActivity() {
                     val mime = contentResolver.getType(uri).orEmpty()
                     val kind = if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video"
                     val duration = if (kind == "image") 5000L else getDuration(uri)
-                    pendingImport = PendingImport(uri.toString(), kind, if (kind == "audio") 2 else selectedTrack, duration)
+                    pendingImport = PendingImport(uri.toString(), kind, selectedTrack, duration)
 
                 }
             }
@@ -254,8 +254,10 @@ class MainActivity : ComponentActivity() {
                                         VideoPreview(previewClip.uri, previewClip.startMs, previewClip.endMs, seekMs,
                                             Modifier.fillMaxSize())
                                     }
+                                } else if (previewClip?.kind == "audio") {
+                                    EqualizerPreview(playheadMs - previewStart, Modifier.fillMaxSize())
                                 } else {
-                                    Text("Import a main video to preview", color = Color.White,
+                                    Text("Import main video or audio to preview", color = Color.White,
                                         modifier = Modifier.align(Alignment.Center))
                                 }
                                 project.clips.forEachIndexed { clipIndex, overlay ->
@@ -744,7 +746,7 @@ class MainActivity : ComponentActivity() {
                                                         if (selected in projects.indices) {
                                                             val updated = projects.toMutableList()
                                                             val project = updated[selected]
-                                                            val track = if (item.kind == "audio") 2 else selectedTrack
+                                                            val track = if (item.kind == "audio" && selectedTrack != 0) 2 else selectedTrack
                                                             updated[selected] = project.copy(clips = project.clips +
                                                                 Clip(item.uri, item.kind, track, item.startMs, item.endMs))
                                                             projects = updated
@@ -978,6 +980,25 @@ private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs:
 }
 
 @Composable
+@Composable
+private fun EqualizerPreview(positionMs: Long, modifier: Modifier = Modifier) {
+    Canvas(modifier.background(dark)) {
+        val bars = 32
+        val spacing = size.width / (bars * 1.5f)
+        val barWidth = spacing * 0.72f
+        for (i in 0 until bars) {
+            val phase = positionMs / 190.0 + i * 0.73
+            val motion = (0.22 + 0.78 * kotlin.math.abs(kotlin.math.sin(phase) * kotlin.math.cos(phase * 0.37 + i)))
+                .toFloat()
+            val height = size.height * motion * 0.67f
+            val x = (i + 0.5f) * size.width / bars - barWidth / 2f
+            drawRoundRect(purple, topLeft = Offset(x, (size.height - height) / 2f),
+                size = androidx.compose.ui.geometry.Size(barWidth, height),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f))
+        }
+    }
+}
+
 private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConfirm: (Long, Long) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val duration = item.durationMs
@@ -1337,7 +1358,7 @@ private fun cachedAudioPeaks(context: android.content.Context, uri: Uri): List<F
     }
 }
 
-private fun extractAudioPeaks(context: android.content.Context, uri: Uri): List<Float> {
+internal fun extractAudioPeaks(context: android.content.Context, uri: Uri): List<Float> {
     val extractor = MediaExtractor()
     try {
         extractor.setDataSource(context, uri, null)
