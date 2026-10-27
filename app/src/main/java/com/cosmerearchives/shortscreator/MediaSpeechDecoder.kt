@@ -9,13 +9,16 @@ import java.nio.ByteOrder
 import kotlin.math.floor
 
 /** Audio decoding boundary for the offline speech recognizer.
- * Runs on a worker thread. Initial implementation limits materialized audio to five minutes.
+ * Runs on a worker thread. Decodes only a bounded time window into memory.
  */
 object MediaSpeechDecoder {
     const val SAMPLE_RATE = 16000
-    private const val MAX_SECONDS = 300
+    private const val MAX_WINDOW_MS = 30_000L
 
-    fun decode(context: Context, uri: Uri): FloatArray {
+    fun decode(context: Context, uri: Uri): FloatArray = decodeWindow(context, uri, 0L, 30_000L)
+
+    fun decodeWindow(context: Context, uri: Uri, startMs: Long, endMs: Long): FloatArray {
+        require(startMs >= 0 && endMs > startMs && endMs - startMs <= MAX_WINDOW_MS) { "Audio window must be 30 seconds or less" }
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
         try {
@@ -25,17 +28,14 @@ object MediaSpeechDecoder {
             } ?: error("This media file has no audio track")
             extractor.selectTrack(index)
             val format = extractor.getTrackFormat(index)
-            if (format.containsKey(MediaFormat.KEY_DURATION)) {
-                val durationUs = format.getLong(MediaFormat.KEY_DURATION)
-                require(durationUs <= MAX_SECONDS * 1_000_000L) {
-                    "Recording is longer than the current five-minute speech scan limit. You can still import and manually trim it."
-                }
-            }
+            extractor.seekTo(startMs * 1000L, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val mime = format.getString(MediaFormat.KEY_MIME) ?: error("Unknown audio format")
             codec = MediaCodec.createDecoderByType(mime)
             codec.configure(format, null, null, 0)
             codec.start()
             val decoded = ArrayList<Float>()
+            val startUs = startMs * 1000L
+            val endUs = endMs * 1000L
             val info = MediaCodec.BufferInfo()
             var inputEnded = false
             var outputEnded = false
@@ -49,7 +49,7 @@ object MediaSpeechDecoder {
                     if (inputIndex >= 0) {
                         val buffer = codec.getInputBuffer(inputIndex)!!
                         val read = extractor.readSampleData(buffer, 0)
-                        if (read < 0) {
+                        if (read < 0 || extractor.sampleTime >= endUs) {
                             codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             inputEnded = true
                         } else {
@@ -78,15 +78,16 @@ object MediaSpeechDecoder {
                         }
                         val frames = info.size / (bytesPerSample * channelCount)
                         val source = buffer.slice().order(ByteOrder.nativeOrder())
-                        repeat(frames) {
+                        repeat(frames) { frame ->
+                            val sampleUs = info.presentationTimeUs + frame * 1_000_000L / sampleRate
                             var sample = 0f
                             repeat(channelCount) {
                                 sample += if (bytesPerSample == 4) source.float else source.short / 32768f
                             }
-                            decoded.add(sample / channelCount)
+                            if (sampleUs >= startUs && sampleUs < endUs) decoded.add(sample / channelCount)
                         }
                         codec.releaseOutputBuffer(outputIndex, false)
-                        if (decoded.size > sampleRate * MAX_SECONDS) error("Audio exceeds five-minute scan limit")
+                        if (decoded.size > sampleRate * 31L) error("Decoder exceeded bounded audio window")
                         if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputEnded = true
                     }
                 }
