@@ -2,6 +2,7 @@ package com.cosmerearchives.shortscreator
 
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -32,7 +33,8 @@ fun EditingTimeline(
     selectedIndex: Int,
     playheadMs: Long,
     onSelect: (Int) -> Unit,
-    onScrub: (Long) -> Unit
+    onScrub: (Long) -> Unit,
+    onMove: (Int, Long) -> Unit
 ) {
     val density = LocalDensity.current
     val pxPerMs = with(density) { PX_PER_SECOND_DP.dp.toPx() } / 1000f
@@ -80,6 +82,30 @@ fun EditingTimeline(
                         val chosen = clips.indices.lastOrNull { i -> clips[i].track == lane && time in positions[i]..(positions[i] + durations[i]) }
                         if (chosen != null) onSelect(chosen) else onScrub(time.coerceAtMost(total))
                     }
+                }.pointerInput(clips, positions, durations) {
+                    var moving = -1
+                    var draggingTime = 0L
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { pos ->
+                            val time = ((pos.x - leftPx) / pxPerMs).toLong().coerceAtLeast(0L)
+                            moving = clips.indices.lastOrNull { i ->
+                                clips[i].track == lane && time in positions[i]..(positions[i] + durations[i])
+                            } ?: -1
+                            if (moving >= 0) {
+                                onSelect(moving)
+                                draggingTime = positions[moving]
+                            }
+                        },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            if (moving >= 0 && clips[moving].track != 0) {
+                                draggingTime = (draggingTime + (amount.x / pxPerMs).toLong()).coerceIn(0L, 60000L)
+                                onMove(moving, draggingTime)
+                            }
+                        },
+                        onDragEnd = { moving = -1 },
+                        onDragCancel = { moving = -1 }
+                    )
                 }) {
                     drawRect(timelineDark)
                     val paint = Paint().apply { isAntiAlias = true; textSize = 12.sp.toPx(); color = android.graphics.Color.WHITE }
