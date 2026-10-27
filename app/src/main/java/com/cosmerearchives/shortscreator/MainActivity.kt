@@ -369,6 +369,15 @@ class MainActivity : ComponentActivity() {
                                 if (sourceDuration > 100L) {
                                     Text("Timeline clip trim · ${(currentClip.endMs - currentClip.startMs) / 1000.0}s selected",
                                         fontWeight = FontWeight.SemiBold)
+                                    TimelineMediaStrip(currentClip.uri, currentClip.kind, sourceDuration,
+                                        currentClip.startMs, currentClip.endMs) { start, end ->
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(startMs = start, endMs = end)
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }
                                     RangeSlider(
                                         value = currentClip.startMs.toFloat()..currentClip.endMs.toFloat(),
                                         onValueChange = { range ->
@@ -928,4 +937,92 @@ private fun extractAudioPeaks(context: android.content.Context, uri: Uri): List<
         }
     } catch (_: Exception) { return emptyList() }
     finally { extractor.release() }
+}
+
+@Composable
+private fun TimelineMediaStrip(
+    uri: String, kind: String, duration: Long, startMs: Long, endMs: Long,
+    onTrim: (Long, Long) -> Unit
+) {
+    val context = LocalContext.current
+    var frames by remember(uri) { mutableStateOf<List<androidx.compose.ui.graphics.ImageBitmap>>(emptyList()) }
+    var peaks by remember(uri) { mutableStateOf<List<Float>>(emptyList()) }
+    LaunchedEffect(uri, kind, duration) {
+        if (kind == "video") {
+            frames = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(context, Uri.parse(uri))
+                    (0 until 8).mapNotNull { i ->
+                        retriever.getFrameAtTime(duration * i * 1000L / 7L,
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.let { raw ->
+                            val scaled = Bitmap.createScaledBitmap(raw, 100, 60, false)
+                            if (scaled !== raw) raw.recycle()
+                            scaled.asImageBitmap()
+                        }
+                    }
+                } catch (_: Exception) { emptyList() } finally { retriever.release() }
+            }
+        } else if (kind == "audio") {
+            peaks = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                extractAudioPeaks(context, Uri.parse(uri))
+            }
+        }
+    }
+    var stripWidth by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val handlePx = with(density) { 14.dp.roundToPx() }
+    Box(Modifier.fillMaxWidth().height(62.dp).background(lavender, RoundedCornerShape(6.dp))
+        .onSizeChanged { stripWidth = it.width }) {
+        if (kind == "video" && frames.isNotEmpty()) {
+            Row(Modifier.fillMaxSize()) {
+                frames.forEach { frame ->
+                    Image(frame, "Timeline frame", Modifier.weight(1f).fillMaxHeight(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                }
+            }
+        } else if (kind == "audio" && peaks.isNotEmpty()) {
+            Canvas(Modifier.fillMaxSize()) {
+                val step = size.width / peaks.size
+                peaks.forEachIndexed { i, peak ->
+                    val half = (peak.coerceIn(0f, 1f) * size.height * 0.46f).coerceAtLeast(1f)
+                    val x = (i + 0.5f) * step
+                    drawLine(purple, Offset(x, size.height / 2 - half), Offset(x, size.height / 2 + half),
+                        strokeWidth = step.coerceAtLeast(1f))
+                }
+            }
+        } else Text("Loading media preview…", Modifier.align(Alignment.Center),
+            style = MaterialTheme.typography.bodySmall)
+        if (stripWidth > 0 && duration > 0) {
+            val left = (stripWidth * startMs.toFloat() / duration).toInt()
+            val right = (stripWidth * endMs.toFloat() / duration).toInt()
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(Color.Black.copy(alpha = 0.46f),
+                    size = androidx.compose.ui.geometry.Size(left.toFloat(), size.height))
+                drawRect(Color.Black.copy(alpha = 0.46f), topLeft = Offset(right.toFloat(), 0f),
+                    size = androidx.compose.ui.geometry.Size((size.width - right).coerceAtLeast(0f), size.height))
+            }
+            Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(left - handlePx / 2, 0) }
+                .width(14.dp).fillMaxHeight().background(purple, RoundedCornerShape(3.dp))
+                .pointerInput(uri, stripWidth, duration) {
+                    detectDragGestures { change, delta ->
+                        change.consume()
+                        val next = (startMs + (delta.x / stripWidth * duration).toLong())
+                            .coerceIn(0L, (endMs - 100L).coerceAtLeast(0L))
+                        onTrim(next, endMs)
+                    }
+                })
+            Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(right - handlePx / 2, 0) }
+                .width(14.dp).fillMaxHeight().background(purple, RoundedCornerShape(3.dp))
+                .pointerInput(uri, stripWidth, duration) {
+                    detectDragGestures { change, delta ->
+                        change.consume()
+                        val next = (endMs + (delta.x / stripWidth * duration).toLong())
+                            .coerceIn((startMs + 100L).coerceAtMost(duration), duration)
+                        onTrim(startMs, next)
+                    }
+                })
+        }
+    }
+    Text("Drag purple edges to trim this timeline clip.", style = MaterialTheme.typography.bodySmall)
 }
