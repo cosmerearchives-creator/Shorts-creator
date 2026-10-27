@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
                     val updated = projects.toMutableList()
                     val current = updated[selected]
                     val mime = contentResolver.getType(uri).orEmpty()
-                    updated[selected] = current.copy(clips = current.clips + Clip(uri.toString(), if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video", if (mime.startsWith("audio/")) 2 else selectedTrack, 0L, if (mime.startsWith("video/")) getDuration(uri) else 0L))
+                    updated[selected] = current.copy(clips = current.clips + Clip(uri.toString(), if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video", if (mime.startsWith("audio/")) 2 else selectedTrack, 0L, if (mime.startsWith("video/") || mime.startsWith("audio/")) getDuration(uri) else 0L))
                     projects = updated
                     saveProjects(projects)
                 }
@@ -200,7 +200,7 @@ class MainActivity : ComponentActivity() {
                             }
                             Spacer(Modifier.height(12.dp))
                             val mainClips = project.clips.filter { it.track == 0 }
-                            val hasUnrenderedTracks = project.clips.any { it.track != 0 }
+                            val hasUnrenderedTracks = project.clips.any { it.track == 1 }
                             Button(
                                 enabled = mainClips.isNotEmpty() && mainClips.all { it.kind == "video" && it.endMs > it.startMs },
                                 onClick = {
@@ -211,9 +211,9 @@ class MainActivity : ComponentActivity() {
                                         }
                                     } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
                                 }
-                            ) { Text("Export main timeline") }
+                            ) { Text("Export video + audio timeline") }
                             if (hasUnrenderedTracks) Text(
-                                "Note: overlay and separate audio tracks are NOT included in this export yet.",
+                                "Note: overlay and image tracks are NOT included in this export yet.",
                                 style = MaterialTheme.typography.bodySmall, color = Color(0xFF8D4738)
                             )
                             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
