@@ -1,2 +1,2 @@
-Release request: v0.37.0-alpha
-Version code 38 - repair Kotlin tab literal in chunked transcript parsing
+Release request: v0.38.0-alpha
+Version code 39 - persistent Whisper transcripts and media library search
