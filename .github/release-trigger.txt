@@ -1,2 +1,2 @@
-Release request: v0.17.0-alpha
-Version code 18 - import preview and trim
+Release request: v0.18.0-alpha
+Version code 19 - visual import trimming
