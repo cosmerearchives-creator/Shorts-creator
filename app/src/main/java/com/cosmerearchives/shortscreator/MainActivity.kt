@@ -999,6 +999,7 @@ private fun EqualizerPreview(positionMs: Long, modifier: Modifier = Modifier) {
     }
 }
 
+@Composable
 private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConfirm: (Long, Long) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val duration = item.durationMs
