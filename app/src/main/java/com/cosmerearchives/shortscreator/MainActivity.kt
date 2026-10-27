@@ -1013,7 +1013,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                     HorizontalDivider()
                     Text("Search & Trim", fontWeight = FontWeight.SemiBold)
                     if (duration > 5L * 60L * 1000L) {
-                        Text("Long recording: importing and manual trimming are available. Full speech scanning is limited to five minutes until chunked processing is added.",
+                        Text("Long recording: speech scanning processes short chunks and saves completed sections for retry.",
                             style = MaterialTheme.typography.bodySmall)
                     }
                     Text(speechStatus, style = MaterialTheme.typography.bodySmall,
@@ -1023,7 +1023,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                         Text("No timestamped words recognized. Try a clearer spoken clip or scan again.",
                             color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
-                    OutlinedButton(enabled = !scanningSpeech && duration <= 5L * 60L * 1000L, onClick = {
+                    OutlinedButton(enabled = !scanningSpeech && duration <= 2L * 60L * 60L * 1000L, onClick = {
                         scanningSpeech = true
                         speechError = false
                         speechScope.launch {
@@ -1036,11 +1036,9 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                                 }
                                 speechStatus = "Preparing audio for speech recognition…"
                                 val words = recognizer.transcribe(Uri.parse(item.uri)) { progress ->
-                                    speechStatus = when {
-                                        progress < 0.1f -> "Step 1/3: Decoding audio…"
-                                        progress < 1f -> "Step 2/3: Recognizing spoken words (this can take several minutes)…"
-                                        else -> "Step 3/3: Preparing searchable transcript…"
-                                    }
+                                    val total = ((item.durationMs - 1L) / 24_000L + 1L).toInt()
+                                    val completed = (progress * total).toInt().coerceIn(0, total)
+                                    speechStatus = "Scanning audio: section $completed of $total (${(progress * 100).toInt()}%)"
                                 }
                                 transcriptWords = words
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
