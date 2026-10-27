@@ -1,2 +1,2 @@
-Release request: v0.14.0-alpha
-Version code 15. Draggable caption preview with saved position.
+Release request: v0.15.0-alpha
+Version code 16 - composite preview release
