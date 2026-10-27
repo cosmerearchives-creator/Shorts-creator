@@ -712,15 +712,30 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs: Long, modifier: Modifier = Modifier.fillMaxWidth().height(240.dp)) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val player = remember(source) {
+    val player = remember(source, startMs, endMs) {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.Builder().setUri(Uri.parse(source)).setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setStartPositionMs(startMs).setEndPositionMs(endMs).build()).build())
+            setMediaItem(MediaItem.Builder().setUri(Uri.parse(source))
+                .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(startMs).setEndPositionMs(endMs).build()).build())
+            playWhenReady = false
             prepare()
         }
     }
-    LaunchedEffect(player, playheadMs) { player.seekTo(playheadMs.coerceAtLeast(0L)) }
+    LaunchedEffect(player, playheadMs) {
+        val target = playheadMs.coerceIn(0L, (endMs - startMs).coerceAtLeast(0L))
+        // Avoid expensive decoder seeks for minor timeline state changes.
+        if (kotlin.math.abs(player.currentPosition - target) > 80L) player.seekTo(target)
+    }
     DisposableEffect(player) { onDispose { player.release() } }
-    AndroidView(factory = { ctx -> PlayerView(ctx).apply { this.player = player } }, modifier = modifier.background(dark))
+    AndroidView(
+        factory = { ctx -> PlayerView(ctx).apply {
+            this.player = player
+            useController = false
+            setKeepContentOnPlayerReset(true)
+        } },
+        update = { view -> if (view.player !== player) view.player = player },
+        modifier = modifier.background(dark)
+    )
 }
 
 @Composable
