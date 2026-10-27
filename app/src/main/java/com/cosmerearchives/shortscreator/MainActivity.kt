@@ -4,6 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.media.MediaMetadataRetriever
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.core.view.WindowCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -616,6 +622,32 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
         }
     }
     DisposableEffect(player) { onDispose { player?.release() } }
+    val thumbnails = remember(item.uri) {
+        if (item.kind != "video" || duration <= 0) emptyList() else {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, Uri.parse(item.uri))
+                (0 until 7).mapNotNull { index ->
+                    retriever.getFrameAtTime(duration * index * 1000L / 6L,
+                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC)?.let { raw ->
+                        val scaled = Bitmap.createScaledBitmap(raw, 100, 64, false)
+                        if (scaled !== raw) raw.recycle()
+                        scaled.asImageBitmap()
+                    }
+                }
+            } catch (_: Exception) { emptyList() } finally { retriever.release() }
+        }
+    }
+    var rangePlaying by remember(item.uri) { mutableStateOf(false) }
+    LaunchedEffect(player, rangePlaying, endMs) {
+        while (rangePlaying && player != null) {
+            if (player.currentPosition >= endMs || !player.isPlaying) {
+                player.pause()
+                rangePlaying = false
+            }
+            kotlinx.coroutines.delay(50L)
+        }
+    }
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Preview and trim " + item.kind) },
@@ -637,6 +669,47 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                 } else {
                     Text("Image selected (images use a default 5-second duration).")
                 }
+                if (thumbnails.isNotEmpty()) {
+                    Text("Video frames", style = MaterialTheme.typography.labelMedium)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        thumbnails.forEach { bitmap ->
+                            Image(bitmap, "Video frame", Modifier.weight(1f).height(42.dp))
+                        }
+                    }
+                }
+                if (item.kind == "audio" && duration > 0L) {
+                    Text("Audio range", style = MaterialTheme.typography.labelMedium)
+                    Canvas(Modifier.fillMaxWidth().height(52.dp)) {
+                        val width = size.width
+                        for (i in 0..65) {
+                            val x = i * width / 65f
+                            val amplitude = 0.15f + 0.75f * kotlin.math.abs(kotlin.math.sin(i * 1.17f).toFloat())
+                            drawLine(androidx.compose.ui.graphics.Color.Gray,
+                                androidx.compose.ui.geometry.Offset(x, size.height * (1f - amplitude) / 2f),
+                                androidx.compose.ui.geometry.Offset(x, size.height * (1f + amplitude) / 2f),
+                                strokeWidth = 3f)
+                        }
+                    }
+                    Text("Visual timing guide; waveform analysis is not yet available.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                if (item.kind != "image" && duration > 0L && player != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = {
+                            if (rangePlaying) {
+                                player.pause()
+                                rangePlaying = false
+                            } else {
+                                player.seekTo(startMs)
+                                player.play()
+                                rangePlaying = true
+                            }
+                        }) { Text(if (rangePlaying) "Stop selection" else "Play selection") }
+                        TextButton(onClick = { player.pause(); rangePlaying = false; player.seekTo(startMs) }) {
+                            Text("Jump to in")
+                        }
+                    }
+                }
                 if (item.kind != "image" && duration > 0L) {
                     Text("In point: ${"%.2f".format(java.util.Locale.US, startMs / 1000.0)}s")
                     Slider(value = startMs.toFloat(), valueRange = 0f..duration.toFloat(),
@@ -650,6 +723,12 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                             endMs = it.toLong().coerceAtLeast((startMs + 100L).coerceAtMost(duration))
                             player?.seekTo((endMs - 500L).coerceAtLeast(startMs))
                         })
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedButton(onClick = { startMs = (startMs - 33L).coerceAtLeast(0L); player?.seekTo(startMs) }) { Text("In −") }
+                        OutlinedButton(onClick = { startMs = (startMs + 33L).coerceAtMost(endMs - 100L); player?.seekTo(startMs) }) { Text("In +") }
+                        OutlinedButton(onClick = { endMs = (endMs - 33L).coerceAtLeast(startMs + 100L); player?.seekTo(endMs - 33L) }) { Text("Out −") }
+                        OutlinedButton(onClick = { endMs = (endMs + 33L).coerceAtMost(duration); player?.seekTo(endMs - 33L) }) { Text("Out +") }
+                    }
                     Text("Importing ${"%.2f".format(java.util.Locale.US, (endMs - startMs) / 1000.0)} seconds")
                 } else if (duration <= 0L && item.kind != "image") {
                     Text("Duration unavailable. This file cannot be trimmed yet.")
