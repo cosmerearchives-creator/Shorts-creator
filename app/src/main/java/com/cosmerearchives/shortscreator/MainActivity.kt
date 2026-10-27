@@ -39,7 +39,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "")
 data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList())
 
 class MainActivity : ComponentActivity() {
@@ -168,6 +168,14 @@ class MainActivity : ComponentActivity() {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = { selectedTrack = 0; launcher.launch(arrayOf("video/*", "audio/*")) }) { Text("Import") }
                                 OutlinedButton(onClick = { selectedTrack = 1; launcher.launch(arrayOf("video/*", "image/*", "audio/*")) }) { Text("Add overlay") }
+                                OutlinedButton(onClick = {
+                                    val updated = projects.toMutableList()
+                                    val cs = project.clips + Clip("", "text", 1, 0L, 5000L, playheadMs, caption = "New title")
+                                    updated[selected] = project.copy(clips = cs)
+                                    projects = updated
+                                    activeClip = cs.lastIndex
+                                    saveProjects(updated)
+                                }) { Text("Add text") }
                             }
                             if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs) {
                                 val duration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
@@ -225,7 +233,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
                                 }
-                            ) { Text("Export timeline with picture-in-picture") }
+                            ) { Text("Export complete timeline") }
                             if (overlayClips.isNotEmpty()) Text(
                                 "Note: V0.10 exports video overlays as small picture-in-picture windows in the upper right. Select a video overlay to adjust its size and position.",
                                 style = MaterialTheme.typography.bodySmall, color = Color(0xFF8D4738)
@@ -248,6 +256,27 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
+                            if (currentClip?.kind == "text" && currentClip.track == 1) {
+                                OutlinedTextField(value = currentClip.caption, label = { Text("Caption text") },
+                                    onValueChange = { value ->
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(caption = value.take(160))
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }, modifier = Modifier.fillMaxWidth())
+                                Text("Caption duration: ${currentClip.endMs / 1000.0}s")
+                                Slider(value = currentClip.endMs.coerceIn(500L, 30000L).toFloat(),
+                                    valueRange = 500f..30000f,
+                                    onValueChange = { value ->
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(endMs = value.toLong())
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                    }, onValueChangeFinished = { saveProjects(projects) })
+                            }
                             if (currentClip?.kind == "video" && currentClip.track == 1) {
                                 Text("PiP size: ${(currentClip.pipScale * 100).toInt()}%")
                                 listOf("Size", "Horizontal", "Vertical").forEachIndexed { i, title ->
@@ -398,7 +427,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat())
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""))
             })
         }
     } catch (_: Exception) { emptyList() }
@@ -407,7 +436,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble())) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption)) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("clips", clips))
         }
         prefs.edit().putString("data", arr.toString()).apply()
