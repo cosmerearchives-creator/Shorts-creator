@@ -683,7 +683,7 @@ class MainActivity : ComponentActivity() {
 
     private fun parseProjects(json: String): List<Project> {
         val arr = JSONArray(json)
-        (0 until arr.length()).map { i ->
+        return (0 until arr.length()).map { i ->
             val obj = arr.getJSONObject(i)
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
