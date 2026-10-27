@@ -679,19 +679,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                 }
                 if (item.kind == "audio" && duration > 0L) {
                     Text("Audio range", style = MaterialTheme.typography.labelMedium)
-                    Canvas(Modifier.fillMaxWidth().height(52.dp)) {
-                        val width = size.width
-                        for (i in 0..65) {
-                            val x = i * width / 65f
-                            val amplitude = 0.15f + 0.75f * kotlin.math.abs(kotlin.math.sin(i * 1.17f).toFloat())
-                            drawLine(androidx.compose.ui.graphics.Color.Gray,
-                                androidx.compose.ui.geometry.Offset(x, size.height * (1f - amplitude) / 2f),
-                                androidx.compose.ui.geometry.Offset(x, size.height * (1f + amplitude) / 2f),
-                                strokeWidth = 3f)
-                        }
-                    }
-                    Text("Visual timing guide; waveform analysis is not yet available.",
-                        style = MaterialTheme.typography.bodySmall)
+                    Text("Waveform extraction is not yet implemented. Use playback and in/out controls for precision.", style = MaterialTheme.typography.bodySmall)
                 }
                 if (item.kind != "image" && duration > 0L && player != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
