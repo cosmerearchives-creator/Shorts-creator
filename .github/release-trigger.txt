@@ -1,2 +1,2 @@
-Release request: v0.27.0-alpha
-Version code 28 - video preview optimization
+Release request: v0.28.0-alpha
+Version code 29 - waveform caching optimization
