@@ -2,6 +2,9 @@ package com.cosmerearchives.shortscreator
 
 import android.content.ContentValues
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Color as AndroidColor
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.StaticOverlaySettings
@@ -35,11 +38,34 @@ object Exporter {
         }
         val output = File(context.cacheDir, "timeline-${System.currentTimeMillis()}.mp4")
         val visualOverlays = clips.filter { it.track == 1 }
-        require(visualOverlays.all { it.kind == "image" || it.kind == "video" }) { "Unsupported visual overlay" }
+        require(visualOverlays.all { it.kind == "image" || it.kind == "video" || it.kind == "text" }) { "Unsupported visual overlay" }
         val images = visualOverlays.filter { it.kind == "image" }.map { item ->
             val bitmap = context.contentResolver.openInputStream(Uri.parse(item.uri))?.use {
                 BitmapFactory.decodeStream(it)
             } ?: error("Unable to open overlay image")
+            item to bitmap
+        }
+        val captions = visualOverlays.filter { it.kind == "text" && it.caption.isNotBlank() }.map { item ->
+            val bitmap = Bitmap.createBitmap(1024, 192, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.WHITE
+                textSize = 62f
+                textAlign = Paint.Align.CENTER
+                setShadowLayer(5f, 2f, 3f, AndroidColor.BLACK)
+            }
+            val words = item.caption.replace("\\n", " ").split(" ")
+            val lines = mutableListOf<String>()
+            var line = ""
+            for (word in words) {
+                val next = if (line.isEmpty()) word else "$"+"line $"+ "word"
+                if (paint.measureText(next) > 940f && line.isNotEmpty()) {
+                    lines.add(line)
+                    line = word
+                } else line = next
+            }
+            if (line.isNotEmpty()) lines.add(line)
+            lines.take(2).forEachIndexed { i, text -> canvas.drawText(text, 512f, 75f + i * 75f, paint) }
             item to bitmap
         }
         var timelineStartMs = 0L
@@ -49,7 +75,7 @@ object Exporter {
             val media = MediaItem.Builder().setUri(Uri.parse(clip.uri))
                 .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                     .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
-            val overlays = images.map { (image, bitmap) ->
+            val overlays = (images + captions).map { (image, bitmap) ->
                 object : BitmapOverlay() {
                     override fun getBitmap(presentationTimeUs: Long): Bitmap = bitmap
                     override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
