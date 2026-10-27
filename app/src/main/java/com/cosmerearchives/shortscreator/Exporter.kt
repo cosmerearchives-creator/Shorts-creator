@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
@@ -30,8 +31,20 @@ object Exporter {
                     .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
             EditedMediaItem.Builder(media).build()
         }
-        val sequence = EditedMediaItemSequence.Builder(edits).build()
-        val composition = Composition.Builder(sequence).build()
+        val mainSequence = EditedMediaItemSequence.withAudioAndVideoFrom(edits)
+        val audio = clips.filter { it.track == 2 && it.kind == "audio" }
+        val sequences = mutableListOf(mainSequence)
+        audio.forEach { clip ->
+            require(clip.endMs > clip.startMs) { "Audio needs a known duration before timeline export" }
+            val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
+            if (clip.positionMs > 0) builder.addGap(clip.positionMs * 1000L)
+            val item = MediaItem.Builder().setUri(Uri.parse(clip.uri))
+                .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
+            builder.addItem(EditedMediaItem.Builder(item).build())
+            sequences.add(builder.build())
+        }
+        val composition = Composition.Builder(sequences).build()
         startExport(context, output, callback) { transformer -> transformer.start(composition, output.absolutePath) }
     }
 
