@@ -58,7 +58,7 @@ object Exporter {
             val lines = mutableListOf<String>()
             var line = ""
             for (word in words) {
-                val next = if (line.isEmpty()) word else "$"+"line $"+ "word"
+                val next = if (line.isEmpty()) word else line + " " + word
                 if (paint.measureText(next) > 940f && line.isNotEmpty()) {
                     lines.add(line)
                     line = word
