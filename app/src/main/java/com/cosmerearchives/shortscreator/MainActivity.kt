@@ -960,7 +960,11 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                                 }
                                 speechStatus = "Preparing audio for speech recognition…"
                                 val words = recognizer.transcribe(Uri.parse(item.uri)) { progress ->
-                                    speechStatus = "Processing: ${(progress * 100).toInt()}%"
+                                    speechStatus = when {
+                                        progress < 0.1f -> "Step 1/3: Decoding audio…"
+                                        progress < 1f -> "Step 2/3: Recognizing spoken words (this can take several minutes)…"
+                                        else -> "Step 3/3: Preparing searchable transcript…"
+                                    }
                                 }
                                 transcriptWords = words
                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
