@@ -54,7 +54,7 @@ object Exporter {
                     override fun getBitmap(presentationTimeUs: Long): Bitmap = bitmap
                     override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
                         val timeMs = segmentStart + presentationTimeUs / 1000L
-                        val visible = timeMs >= image.positionMs && timeMs < image.positionMs + image.endMs
+                        val visible = timeMs >= image.positionMs && timeMs < image.positionMs + image.endMs.coerceAtLeast(5000L)
                         return StaticOverlaySettings.Builder()
                             .setAlphaScale(if (visible) 1f else 0f)
                             .build()
