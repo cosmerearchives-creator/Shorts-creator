@@ -199,6 +199,24 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             Spacer(Modifier.height(12.dp))
+                            val mainClips = project.clips.filter { it.track == 0 }
+                            val hasUnrenderedTracks = project.clips.any { it.track != 0 }
+                            Button(
+                                enabled = mainClips.isNotEmpty() && mainClips.all { it.kind == "video" && it.endMs > it.startMs },
+                                onClick = {
+                                    exportStatus = "Exporting main timeline…"
+                                    try {
+                                        Exporter.exportTimeline(this@MainActivity, project.clips) { status ->
+                                            runOnUiThread { exportStatus = status }
+                                        }
+                                    } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
+                                }
+                            ) { Text("Export main timeline") }
+                            if (hasUnrenderedTracks) Text(
+                                "Note: overlay and separate audio tracks are NOT included in this export yet.",
+                                style = MaterialTheme.typography.bodySmall, color = Color(0xFF8D4738)
+                            )
+                            if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
                             EditingTimeline(
                                 clips = project.clips,
                                 selectedIndex = activeClip,
