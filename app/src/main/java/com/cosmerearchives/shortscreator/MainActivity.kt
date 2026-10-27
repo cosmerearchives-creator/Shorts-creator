@@ -970,7 +970,7 @@ private fun TimelineMediaStrip(
         }
     }
     var stripWidth by remember { mutableIntStateOf(0) }
-    val density = LocalDensity.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val handlePx = with(density) { 14.dp.roundToPx() }
     Box(Modifier.fillMaxWidth().height(62.dp).background(lavender, RoundedCornerShape(6.dp))
         .onSizeChanged { stripWidth = it.width }) {
