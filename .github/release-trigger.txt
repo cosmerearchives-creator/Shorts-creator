@@ -1,2 +1,2 @@
 Release request: v0.40.0-alpha
-Audio main-track import and equalizer video generation
+Audio main-track equalizer export plus Compose annotation fix
