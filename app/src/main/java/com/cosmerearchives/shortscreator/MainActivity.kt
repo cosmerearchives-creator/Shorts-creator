@@ -27,6 +27,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import android.graphics.BitmapFactory
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -160,51 +163,82 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             val previewClip = previewIndex?.let { project.clips[it] }
-                            if (previewClip != null && previewClip.kind == "video") {
-                                val seekMs = (playheadMs - previewStart).coerceAtLeast(0L)
-                                key(previewClip.uri, previewClip.startMs, previewClip.endMs) {
-                                    VideoPreview(previewClip.uri, previewClip.startMs, previewClip.endMs, seekMs)
+                            var previewSize by remember { mutableStateOf(IntSize.Zero) }
+                            val frameContext = LocalContext.current
+                            Box(Modifier.fillMaxWidth().height(240.dp).background(dark, RoundedCornerShape(16.dp))
+                                .onSizeChanged { previewSize = it }) {
+                                if (previewClip != null && previewClip.kind == "video") {
+                                    val seekMs = (playheadMs - previewStart).coerceAtLeast(0L)
+                                    key(previewClip.uri, previewClip.startMs, previewClip.endMs) {
+                                        VideoPreview(previewClip.uri, previewClip.startMs, previewClip.endMs, seekMs,
+                                            Modifier.fillMaxSize())
+                                    }
+                                } else {
+                                    Text("Import a main video to preview", color = Color.White,
+                                        modifier = Modifier.align(Alignment.Center))
                                 }
-                            } else {
-                                Box(Modifier.fillMaxWidth().height(230.dp).background(dark, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                                    Text(if (currentClip?.kind == "audio") "Audio track selected" else "Import a video to preview", color = Color.White)
-                                }
-                            }
-                            if (currentClip?.kind == "text" && currentClip.track == 1) {
-                                var previewSize by remember { mutableStateOf(IntSize.Zero) }
-                                val color = Color(currentClip.textColor)
-                                Box(Modifier.fillMaxWidth().height(230.dp).background(dark, RoundedCornerShape(12.dp))
-                                    .onSizeChanged { previewSize = it }) {
-                                    val x = ((currentClip.textX + 1f) / 2f * previewSize.width).toInt()
-                                    val y = ((1f - currentClip.textY) / 2f * previewSize.height).toInt()
-                                    Text(currentClip.caption, color = color,
-                                        fontSize = (currentClip.textSize * 0.42f).sp,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.align(Alignment.TopStart)
-                                            .offset { androidx.compose.ui.unit.IntOffset(x - previewSize.width / 4, y - 24) }
-                                            .width(180.dp)
-                                            .pointerInput(activeClip, previewSize) {
-                                                detectDragGestures { change, drag ->
-                                                    change.consume()
-                                                    if (previewSize.width > 0 && previewSize.height > 0) {
-                                                        val clips = projects[selected].clips.toMutableList()
-                                                        val item = clips.getOrNull(activeClip)
-                                                        if (item != null && item.kind == "text") {
-                                                            clips[activeClip] = item.copy(
-                                                                textX = (item.textX + 2f * drag.x / previewSize.width).coerceIn(-0.85f, 0.85f),
-                                                                textY = (item.textY - 2f * drag.y / previewSize.height).coerceIn(-0.85f, 0.85f))
-                                                            val updated = projects.toMutableList()
-                                                            updated[selected] = project.copy(clips = clips)
-                                                            projects = updated
-                                                            saveProjects(updated)
+                                project.clips.forEachIndexed { clipIndex, overlay ->
+                                    if (overlay.track == 1 &&
+                                        playheadMs >= overlay.positionMs &&
+                                        playheadMs < overlay.positionMs + (overlay.endMs - overlay.startMs).coerceAtLeast(0L)) {
+                                        when (overlay.kind) {
+                                            "text" -> {
+                                                val x = ((overlay.textX + 1f) / 2f * previewSize.width).toInt()
+                                                val y = ((1f - overlay.textY) / 2f * previewSize.height).toInt()
+                                                Text(overlay.caption, color = Color(overlay.textColor),
+                                                    fontSize = (overlay.textSize * 0.42f).sp,
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier.align(Alignment.TopStart)
+                                                        .offset { androidx.compose.ui.unit.IntOffset(x - previewSize.width / 4, y - 24) }
+                                                        .width(180.dp)
+                                                        .pointerInput(clipIndex, previewSize) {
+                                                            detectDragGestures { change, drag ->
+                                                                change.consume()
+                                                                if (previewSize.width > 0 && previewSize.height > 0) {
+                                                                    val cs = projects[selected].clips.toMutableList()
+                                                                    val item = cs.getOrNull(clipIndex)
+                                                                    if (item != null && item.kind == "text") {
+                                                                        cs[clipIndex] = item.copy(
+                                                                            textX = (item.textX + 2f * drag.x / previewSize.width).coerceIn(-0.85f, 0.85f),
+                                                                            textY = (item.textY - 2f * drag.y / previewSize.height).coerceIn(-0.85f, 0.85f))
+                                                                        val updated = projects.toMutableList()
+                                                                        updated[selected] = projects[selected].copy(clips = cs)
+                                                                        projects = updated
+                                                                        saveProjects(updated)
+                                                                    }
+                                                                }
+                                                            }
+                                                        })
+                                            }
+                                            "image" -> {
+                                                val bitmap = remember(overlay.uri) {
+                                                    try {
+                                                        frameContext.contentResolver.openInputStream(Uri.parse(overlay.uri))?.use {
+                                                            BitmapFactory.decodeStream(it)?.asImageBitmap()
                                                         }
-                                                    }
+                                                    } catch (_: Exception) { null }
                                                 }
-                                            })
+                                                if (bitmap != null) Image(bitmap, "Image overlay",
+                                                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.7f).height(150.dp))
+                                            }
+                                            "video" -> {
+                                                val pipTime = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
+                                                val pipWidth = (previewSize.width * overlay.pipScale).toInt().coerceAtLeast(1)
+                                                val px = ((overlay.pipX + 1f) * previewSize.width / 2f - pipWidth / 2f).toInt()
+                                                val py = ((1f - overlay.pipY) * previewSize.height / 2f - 40).toInt()
+                                                key(overlay.uri, overlay.startMs, overlay.endMs) {
+                                                    VideoPreview(overlay.uri, overlay.startMs, overlay.endMs, pipTime,
+                                                        Modifier.offset { androidx.compose.ui.unit.IntOffset(px, py) }
+                                                            .width(with(androidx.compose.ui.platform.LocalDensity.current) { pipWidth.toDp() })
+                                                            .height(85.dp))
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                Text("Drag the text to position it. Export uses your saved coordinates.",
-                                    style = MaterialTheme.typography.bodySmall)
                             }
+                            Text("Preview shows active overlays at the playhead. Drag visible captions to position them.",
+                                style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = { selectedTrack = 0; launcher.launch(arrayOf("video/*", "audio/*")) }) { Text("Import") }
@@ -521,7 +555,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs: Long) {
+private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs: Long, modifier: Modifier = Modifier.fillMaxWidth().height(240.dp)) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val player = remember(source) {
         ExoPlayer.Builder(context).build().apply {
@@ -531,5 +565,5 @@ private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs:
     }
     LaunchedEffect(player, playheadMs) { player.seekTo(playheadMs.coerceAtLeast(0L)) }
     DisposableEffect(player) { onDispose { player.release() } }
-    AndroidView(factory = { ctx -> PlayerView(ctx).apply { this.player = player } }, modifier = Modifier.fillMaxWidth().height(240.dp).background(dark))
+    AndroidView(factory = { ctx -> PlayerView(ctx).apply { this.player = player } }, modifier = modifier.background(dark))
 }
