@@ -1,6 +1,7 @@
 package com.cosmerearchives.shortscreator
 
 import android.content.ContentValues
+import android.media.MediaMetadataRetriever
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -131,8 +132,14 @@ object Exporter {
                         .build()
                 } else StaticOverlaySettings.Builder().build()
         }
-        val composition = Composition.Builder(sequences).setVideoCompositorSettings(compositor).build()
-        startExport(context, output, callback) { transformer -> transformer.start(composition, output.absolutePath) }
+        val composition = Composition.Builder(sequences)
+            .setVideoCompositorSettings(compositor)
+            // Apply the project dimensions to the composed output, not just input clips.
+            .setEffects(Effects(emptyList(), listOf(
+                Presentation.createForWidthAndHeight(outputWidth, outputHeight, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)
+            )))
+            .build()
+        startExport(context, output, callback, outputWidth to outputHeight) { transformer -> transformer.start(composition, output.absolutePath) }
     }
 
     fun export(context: Context, source: String, startMs: Long, endMs: Long, ratio: String, callback: (String) -> Unit) {
@@ -148,7 +155,7 @@ object Exporter {
         val (width, height) = exportDimensions(ratio)
         val presentation = Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)
         val edited = EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), listOf(presentation))).build()
-        startExport(context, output, callback) { transformer -> transformer.start(edited, output.absolutePath) }
+        startExport(context, output, callback, width to height) { transformer -> transformer.start(edited, output.absolutePath) }
     }
 
     private fun exportDimensions(ratio: String): Pair<Int, Int> = when (ratio) {
@@ -158,13 +165,24 @@ object Exporter {
         else -> 1920 to 1080
     }
 
-    private fun startExport(context: Context, output: File, callback: (String) -> Unit, start: (Transformer) -> Unit) {
+    private fun startExport(context: Context, output: File, callback: (String) -> Unit, expectedSize: Pair<Int, Int>, start: (Transformer) -> Unit) {
         val transformer = Transformer.Builder(context)
             .setVideoMimeType(androidx.media3.common.MimeTypes.VIDEO_H264)
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                     var destination: Uri? = null
                     try {
+                        val retriever = MediaMetadataRetriever()
+                        val actualSize = try {
+                            retriever.setDataSource(output.absolutePath)
+                            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull()
+                            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()
+                            val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                            if (width == null || height == null) null else if (rotation % 180 != 0) height to width else width to height
+                        } finally { retriever.release() }
+                        check(actualSize == expectedSize) {
+                            "Export resolution mismatch: expected ${expectedSize.first}x${expectedSize.second}, got ${actualSize?.first}x${actualSize?.second}. File was not saved."
+                        }
                         val resolver = context.contentResolver
                         val values = ContentValues().apply {
                             put(MediaStore.Video.Media.DISPLAY_NAME, output.name)
