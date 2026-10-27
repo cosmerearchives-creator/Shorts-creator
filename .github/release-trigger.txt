@@ -1,2 +1,2 @@
-Release request: v0.38.0-alpha
-Version code 39 - persistent Whisper transcripts and media library search
+Release request: v0.39.0-alpha
+Version code 40 - project deletion, bulk deletion, offline media copies and transcript cleanup
