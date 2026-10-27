@@ -1,2 +1,2 @@
-Release request: v0.29.0-alpha
-Version code 30 - project backup and recovery
+Release request: v0.30.0-alpha
+Version code 31 - export cleanup
