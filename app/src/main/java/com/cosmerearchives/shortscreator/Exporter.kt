@@ -83,7 +83,7 @@ object Exporter {
                         val visible = timeMs >= image.positionMs && timeMs < image.positionMs + image.endMs.coerceAtLeast(5000L)
                         return StaticOverlaySettings.Builder()
                             .setAlphaScale(if (visible) 1f else 0f)
-                            .setBackgroundFrameAnchor(if (image.kind == "text") image.textX else 0f, if (image.kind == "text") image.textY else 0f)
+                            .setBackgroundFrameAnchor(when (image.kind) { "text" -> image.textX; "image" -> image.imageX; else -> 0f }, when (image.kind) { "text" -> image.textY; "image" -> image.imageY; else -> 0f })
                             .build()
                     }
                 }
