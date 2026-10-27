@@ -1,2 +1,2 @@
-Release request: v0.18.0-alpha
-Version code 19 - visual import trimming
+Release request: v0.19.0-alpha
+Version code 20 - waveform and drag handles
