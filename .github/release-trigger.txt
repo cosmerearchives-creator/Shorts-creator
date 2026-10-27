@@ -1,2 +1,2 @@
-Release request: v0.5.1-alpha
-Android navigation bar inset/opaque window hotfix; versionCode 6.
+Release request: v0.6.0-alpha
+Main-track timeline export, versionCode 7.
