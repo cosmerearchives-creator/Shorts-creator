@@ -4,6 +4,9 @@ import android.content.ContentValues
 import android.graphics.BitmapFactory
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.StaticOverlaySettings
+import androidx.media3.effect.OverlaySettings
+import android.graphics.Bitmap
 import androidx.media3.transformer.Effects
 import android.content.Context
 import android.net.Uri
@@ -33,20 +36,33 @@ object Exporter {
         require(visualOverlays.all { it.kind == "image" }) {
             "Video overlays are not supported in exports yet"
         }
-        require(visualOverlays.size <= 1) { "Only one image overlay can be exported in V0.8" }
-        val bitmap = visualOverlays.singleOrNull()?.let { item ->
-            context.contentResolver.openInputStream(Uri.parse(item.uri))?.use { stream ->
-                BitmapFactory.decodeStream(stream)
-            } ?: error("Unable to open image overlay")
+        val images = visualOverlays.map { item ->
+            val bitmap = context.contentResolver.openInputStream(Uri.parse(item.uri))?.use {
+                BitmapFactory.decodeStream(it)
+            } ?: error("Unable to open overlay image")
+            item to bitmap
         }
-        val visualEffects = if (bitmap != null)
-            listOf(OverlayEffect(listOf(BitmapOverlay.createStaticBitmapOverlay(bitmap))))
-        else emptyList()
+        var timelineStartMs = 0L
         val edits = main.map { clip ->
+            val segmentStart = timelineStartMs
+            timelineStartMs += clip.endMs - clip.startMs
             val media = MediaItem.Builder().setUri(Uri.parse(clip.uri))
                 .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                     .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
-            EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), visualEffects)).build()
+            val overlays = images.map { (image, bitmap) ->
+                object : BitmapOverlay() {
+                    override fun getBitmap(presentationTimeUs: Long): Bitmap = bitmap
+                    override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
+                        val timeMs = segmentStart + presentationTimeUs / 1000L
+                        val visible = timeMs >= image.positionMs && timeMs < image.positionMs + image.endMs
+                        return StaticOverlaySettings.Builder()
+                            .setAlphaScale(if (visible) 1f else 0f)
+                            .build()
+                    }
+                }
+            }
+            val effects = if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()
+            EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), effects)).build()
         }
         val mainSequence = EditedMediaItemSequence.withAudioAndVideoFrom(edits)
         val audio = clips.filter { it.track == 2 && it.kind == "audio" }
