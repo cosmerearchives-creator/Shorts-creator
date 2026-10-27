@@ -1,2 +1,2 @@
-Release request: v0.26.0-alpha
-Version code 27 - image preview memory optimization
+Release request: v0.27.0-alpha
+Version code 28 - video preview optimization
