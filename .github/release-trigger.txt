@@ -1,2 +1,2 @@
-Release request: v0.34.0-alpha
-Version code 35 - visible speech scan stages, transcript inspection and clear search feedback
+Release request: v0.35.0-alpha
+Version code 36 - full-screen scrollable import review and reusable persistent media library
