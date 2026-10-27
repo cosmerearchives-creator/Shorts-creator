@@ -1071,7 +1071,9 @@ private fun TimelineMediaStrip(
 private val previewImageCache = PreviewImageCache()
 
 private class PreviewImageCache {
-    private val cache = object : android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(12) {}
+    private val cache = object : android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(24 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: androidx.compose.ui.graphics.ImageBitmap): Int = value.width * value.height * 4
+    }
     @Synchronized
     fun get(context: android.content.Context, uri: Uri): androidx.compose.ui.graphics.ImageBitmap? {
         cache.get(uri.toString())?.let { return it }
@@ -1083,7 +1085,7 @@ private class PreviewImageCache {
             while (bounds.outWidth / sample > 1080 || bounds.outHeight / sample > 1080) sample *= 2
             val options = BitmapFactory.Options().apply {
                 inSampleSize = sample
-                inPreferredConfig = Bitmap.Config.RGB_565
+                inPreferredConfig = Bitmap.Config.ARGB_8888
             }
             val bitmap = context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
