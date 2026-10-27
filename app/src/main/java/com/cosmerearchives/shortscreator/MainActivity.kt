@@ -670,8 +670,19 @@ class MainActivity : ComponentActivity() {
         } finally { retriever.release() }
     } catch (_: Exception) { 0L }
 
-    private fun loadProjects(): List<Project> = try {
-        val arr = JSONArray(prefs.getString("data", "[]"))
+    private fun loadProjects(): List<Project> {
+        val primary = prefs.getString("data", "[]") ?: "[]"
+        val backup = prefs.getString("data_backup", null)
+        return try {
+            parseProjects(primary)
+        } catch (_: Exception) {
+            if (backup == null) emptyList()
+            else try { parseProjects(backup) } catch (_: Exception) { emptyList() }
+        }
+    }
+
+    private fun parseProjects(json: String): List<Project> {
+        val arr = JSONArray(json)
         (0 until arr.length()).map { i ->
             val obj = arr.getJSONObject(i)
             val clips = obj.optJSONArray("clips") ?: JSONArray()
@@ -680,7 +691,7 @@ class MainActivity : ComponentActivity() {
                 Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat())
             })
         }
-    } catch (_: Exception) { emptyList() }
+    }
 
     private fun saveProjects(projects: List<Project>) {
         val snapshot = projects.toList()
@@ -703,7 +714,17 @@ class MainActivity : ComponentActivity() {
             p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble())) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("clips", clips))
         }
-        prefs.edit().putString("data", arr.toString()).apply()
+        val serialized = arr.toString()
+        val previous = prefs.getString("data", null)
+        if (previous == serialized) return
+        val editor = prefs.edit()
+        if (previous != null) {
+            try {
+                JSONArray(previous)
+                editor.putString("data_backup", previous)
+            } catch (_: Exception) { }
+        }
+        editor.putString("data", serialized).apply()
     }
 
 
