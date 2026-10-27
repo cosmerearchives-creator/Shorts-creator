@@ -93,6 +93,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             var projects by remember { mutableStateOf(loadProjects()) }
             var selected by remember { mutableIntStateOf(-1) }
+            var projectDeleteTargets by remember { mutableStateOf<Set<Int>>(emptySet()) }
+            var confirmProjectDelete by remember { mutableStateOf(false) }
+            var bulkProjectMode by remember { mutableStateOf(false) }
+            var confirmMediaDeletion by remember { mutableStateOf<LibraryMedia?>(null) }
+            var libraryStatus by remember { mutableStateOf("") }
+            var libraryBusy by remember { mutableStateOf(false) }
+            val libraryScope = rememberCoroutineScope()
             var newDialog by remember { mutableStateOf(false) }
             var showSettings by remember { mutableStateOf(false) }
             var selectedTrack by remember { mutableIntStateOf(0) }
@@ -182,13 +189,39 @@ class MainActivity : ComponentActivity() {
                             }
                             Text("Your projects", style = MaterialTheme.typography.titleMedium)
                             Spacer(Modifier.height(12.dp))
-                            Button(onClick = { newDialog = true }) { Icon(Icons.Default.Add, null); Text(" New project") }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { newDialog = true }) { Icon(Icons.Default.Add, null); Text(" New project") }
+                                OutlinedButton(onClick = { bulkProjectMode = !bulkProjectMode; projectDeleteTargets = emptySet() }) {
+                                    Text(if (bulkProjectMode) "Done selecting" else "Select projects")
+                                }
+                            }
+                            if (bulkProjectMode && projectDeleteTargets.isNotEmpty()) {
+                                Button(onClick = { confirmProjectDelete = true }) {
+                                    Text("Delete selected (${projectDeleteTargets.size})")
+                                }
+                            }
                             Spacer(Modifier.height(16.dp))
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 projects.indices.forEach { index ->
-                                    Card(onClick = { selected = index }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                    Card(onClick = {
+                                        if (bulkProjectMode) projectDeleteTargets = if (index in projectDeleteTargets)
+                                            projectDeleteTargets - index else projectDeleteTargets + index
+                                        else selected = index
+                                    }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                            Text(projects[index].name, fontWeight = FontWeight.Bold)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (bulkProjectMode) Checkbox(
+                                                    checked = index in projectDeleteTargets,
+                                                    onCheckedChange = { checked ->
+                                                        projectDeleteTargets = if (checked) projectDeleteTargets + index else projectDeleteTargets - index
+                                                    }
+                                                )
+                                                Text(projects[index].name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                                if (!bulkProjectMode) TextButton(onClick = {
+                                                    projectDeleteTargets = setOf(index)
+                                                    confirmProjectDelete = true
+                                                }) { Text("Delete") }
+                                            }
                                             Text("${projects[index].ratio} · ${projects[index].clips.size} media items")
                                         }
                                     }
@@ -644,6 +677,25 @@ class MainActivity : ComponentActivity() {
                             Text("V0.5: scrollable timeline, splitting and clip rearrangement. Full multitrack export remains a later milestone.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
+                    if (confirmProjectDelete) {
+                        AlertDialog(
+                            onDismissRequest = { confirmProjectDelete = false },
+                            title = { Text("Delete projects?") },
+                            text = { Text("Delete ${projectDeleteTargets.size} selected project(s)? This removes their timelines and cannot be undone. Library media and speech transcripts are kept.") },
+                            confirmButton = {
+                                Button(onClick = {
+                                    val remove = projectDeleteTargets
+                                    val updated = projects.filterIndexed { index, _ -> index !in remove }
+                                    projects = updated
+                                    saveProjects(updated)
+                                    selected = -1
+                                    projectDeleteTargets = emptySet()
+                                    confirmProjectDelete = false
+                                }) { Text("Delete permanently") }
+                            },
+                            dismissButton = { TextButton(onClick = { confirmProjectDelete = false }) { Text("Cancel") } }
+                        )
+                    }
                     if (showLibrary) {
                         Surface(color = ivory, modifier = Modifier.fillMaxSize()) {
                             Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -663,6 +715,8 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
                                 )
+                                if (libraryBusy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                if (libraryStatus.isNotBlank()) Text(libraryStatus, style = MaterialTheme.typography.bodySmall)
                                 if (libraryItems.isEmpty()) Text("Your library is empty. Import a file to get started.")
                                 if (librarySpeechQuery.isNotBlank())
                                     Text("${libraryResults.values.sumOf { it.size }} matching phrase(s)",
@@ -709,6 +763,52 @@ class MainActivity : ComponentActivity() {
                                                         writeLibrary(this@MainActivity, libraryItems)
                                                     }) { Text("Remove") }
                                                 }
+                                                val local = item.uri.startsWith("file://") &&
+                                                    Uri.parse(item.uri).path?.startsWith(filesDir.absolutePath + "/media-archive/") == true
+                                                if (!local) {
+                                                    OutlinedButton(enabled = !libraryBusy, onClick = {
+                                                        libraryBusy = true
+                                                        libraryStatus = "Copying media to private offline storage…"
+                                                        libraryScope.launch {
+                                                            try {
+                                                                val copied = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                                    val dir = java.io.File(filesDir, "media-archive").apply { mkdirs() }
+                                                                    val ext = when (item.kind) { "audio" -> ".audio"; "video" -> ".video"; else -> ".image" }
+                                                                    val file = java.io.File(dir, java.util.UUID.randomUUID().toString() + ext)
+                                                                    try {
+                                                                        contentResolver.openInputStream(Uri.parse(item.uri))!!.use { input ->
+                                                                            file.outputStream().use { output -> input.copyTo(output, 65536) }
+                                                                        }
+                                                                        val cache = TranscriptCache(this@MainActivity)
+                                                                        val oldKey = cache.sourceKey(Uri.parse(item.uri), "ggml-tiny.en-v1")
+                                                                        val newUri = Uri.fromFile(file)
+                                                                        val newKey = cache.sourceKey(newUri, "ggml-tiny.en-v1")
+                                                                        cache.copyEntries(oldKey, newKey)
+                                                                        LibraryMedia(newUri.toString(), item.kind, item.startMs, item.endMs)
+                                                                    } catch (e: Exception) { file.delete(); throw e }
+                                                                }
+                                                                libraryItems = libraryItems.map { if (it.uri == item.uri) copied else it }
+                                                                writeLibrary(this@MainActivity, libraryItems)
+                                                                libraryStatus = "Saved offline. Existing projects continue using their original media source."
+                                                            } catch (e: Exception) {
+                                                                libraryStatus = "Offline copy failed: ${e.message}"
+                                                            } finally { libraryBusy = false }
+                                                        }
+                                                    }) { Text("Keep offline copy") }
+                                                } else {
+                                                    Text("Stored offline", style = MaterialTheme.typography.bodySmall)
+                                                    OutlinedButton(onClick = { confirmMediaDeletion = item }) { Text("Delete offline copy") }
+                                                }
+                                                TextButton(onClick = {
+                                                    libraryScope.launch {
+                                                        val count = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                            val cache = TranscriptCache(this@MainActivity)
+                                                            cache.deleteEntries(cache.sourceKey(Uri.parse(item.uri), "ggml-tiny.en-v1"))
+                                                        }
+                                                        libraryStatus = "Deleted $count stored speech transcript section(s). Media is unchanged."
+                                                        libraryResults = emptyMap()
+                                                    }
+                                                }) { Text("Delete transcript only") }
                                             }
                                         }
                                         }
@@ -716,6 +816,23 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    }
+                    if (confirmMediaDeletion != null) {
+                        val toDelete = confirmMediaDeletion!!
+                        AlertDialog(
+                            onDismissRequest = { confirmMediaDeletion = null },
+                            title = { Text("Delete offline copy?") },
+                            text = { Text("This removes the app-owned media file. Projects using this offline copy may stop playing it. Speech transcripts are retained.") },
+                            confirmButton = { Button(onClick = {
+                                val uri = Uri.parse(toDelete.uri)
+                                val path = uri.path
+                                if (path != null && path.startsWith(filesDir.absolutePath + "/media-archive/")) java.io.File(path).delete()
+                                libraryItems = libraryItems.filterNot { it.uri == toDelete.uri }
+                                writeLibrary(this@MainActivity, libraryItems)
+                                confirmMediaDeletion = null
+                            }) { Text("Delete copy") } },
+                            dismissButton = { TextButton(onClick = { confirmMediaDeletion = null }) { Text("Cancel") } }
+                        )
                     }
                     pendingImport?.let { pending ->
                         ImportReviewDialog(pending,
