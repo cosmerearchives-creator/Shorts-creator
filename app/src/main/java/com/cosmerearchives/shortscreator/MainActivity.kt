@@ -225,9 +225,9 @@ class MainActivity : ComponentActivity() {
                                         }
                                     } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
                                 }
-                            ) { Text("Export timeline with timed images") }
+                            ) { Text("Export timeline with picture-in-picture") }
                             if (overlayClips.isNotEmpty()) Text(
-                                "Note: V0.9 exports multiple image overlays at their timeline positions. Video overlays remain unsupported.",
+                                "Note: V0.10 exports video overlays as small picture-in-picture windows in the upper right. Positioning is fixed for now.",
                                 style = MaterialTheme.typography.bodySmall, color = Color(0xFF8D4738)
                             )
                             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
