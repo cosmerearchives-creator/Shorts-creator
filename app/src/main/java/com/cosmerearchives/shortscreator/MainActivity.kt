@@ -899,11 +899,16 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
     val speechMatches = remember(transcriptWords, speechQuery) {
         SpeechSearch.find(transcriptWords.orEmpty(), speechQuery)
     }
-    AlertDialog(
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = onCancel,
-        title = { Text("Preview and trim " + item.kind) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = ivory) {
+            Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp)) {
+                Text("Preview and trim " + item.kind, style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(12.dp))
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (item.kind == "video" && player != null) {
                     AndroidView(factory = { ctx -> PlayerView(ctx).apply {
                         this.player = player
@@ -1129,15 +1134,18 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                 } else if (duration <= 0L && item.kind != "image") {
                     Text("Duration unavailable. This file cannot be trimmed yet.")
                 }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onCancel) { Text("Cancel") }
+                    Button(onClick = { player?.pause(); onConfirm(startMs, endMs) },
+                        enabled = item.kind == "image" || (duration > 0L && endMs > startMs)) {
+                        Text("Save to library")
+                    }
+                }
             }
-        },
-        confirmButton = {
-            Button(onClick = { player?.pause(); onConfirm(startMs, endMs) },
-                enabled = item.kind == "image" || (duration > 0L && endMs > startMs)) {
-                Text("Import trimmed clip")
-            }
-        },
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
+        }
     )
 }
 
