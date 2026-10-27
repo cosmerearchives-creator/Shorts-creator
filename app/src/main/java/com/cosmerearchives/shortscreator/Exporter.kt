@@ -9,6 +9,7 @@ import android.provider.MediaStore
 import androidx.media3.common.MediaItem
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
@@ -16,6 +17,24 @@ import java.io.File
 
 /** v0.2: a single trimmed source video; not yet a multitrack composition. */
 object Exporter {
+    fun exportTimeline(context: Context, clips: List<Clip>, callback: (String) -> Unit) {
+        val main = clips.filter { it.track == 0 }
+        require(main.isNotEmpty()) { "Add main-track videos before exporting" }
+        require(main.all { it.kind == "video" && it.endMs > it.startMs }) {
+            "Timeline export currently supports trimmed video clips on the main track only"
+        }
+        val output = File(context.cacheDir, "timeline-${System.currentTimeMillis()}.mp4")
+        val edits = main.map { clip ->
+            val media = MediaItem.Builder().setUri(Uri.parse(clip.uri))
+                .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
+            EditedMediaItem.Builder(media).build()
+        }
+        val sequence = EditedMediaItemSequence.Builder(edits).build()
+        val composition = Composition.Builder(sequence).build()
+        startExport(context, output, callback) { transformer -> transformer.start(composition, output.absolutePath) }
+    }
+
     fun export(context: Context, source: String, startMs: Long, endMs: Long, callback: (String) -> Unit) {
         val output = File(context.cacheDir, "shorts-${System.currentTimeMillis()}.mp4")
         val media = MediaItem.Builder()
@@ -27,6 +46,10 @@ object Exporter {
                     .build()
             ).build()
         val edited = EditedMediaItem.Builder(media).build()
+        startExport(context, output, callback) { transformer -> transformer.start(edited, output.absolutePath) }
+    }
+
+    private fun startExport(context: Context, output: File, callback: (String) -> Unit, start: (Transformer) -> Unit) {
         val transformer = Transformer.Builder(context)
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
@@ -58,6 +81,6 @@ object Exporter {
                     callback("Export failed: ${exportException.message}")
                 }
             }).build()
-        transformer.start(edited, output.absolutePath)
+        start(transformer)
     }
 }
