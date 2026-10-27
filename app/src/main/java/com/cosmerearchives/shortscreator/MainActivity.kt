@@ -235,10 +235,11 @@ class MainActivity : ComponentActivity() {
                                                         previewImageCache.get(frameContext, Uri.parse(overlay.uri))
                                                     }
                                                 }
-                                                if (bitmap != null) {
+                                                val previewBitmap = bitmap
+                                                if (previewBitmap != null) {
                                                     val dx = (overlay.imageX * previewSize.width / 2f).toInt()
                                                     val dy = (-overlay.imageY * previewSize.height / 2f).toInt()
-                                                    Image(bitmap, "Image overlay",
+                                                    Image(previewBitmap, "Image overlay",
                                                         modifier = Modifier.align(Alignment.Center)
                                                             .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
                                                             .fillMaxWidth((0.7f * overlay.imageScale).coerceIn(0.1f, 1f)).height((150f * overlay.imageScale).dp)
