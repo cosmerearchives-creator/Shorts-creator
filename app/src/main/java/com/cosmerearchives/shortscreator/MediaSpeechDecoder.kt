@@ -25,6 +25,12 @@ object MediaSpeechDecoder {
             } ?: error("This media file has no audio track")
             extractor.selectTrack(index)
             val format = extractor.getTrackFormat(index)
+            if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                val durationUs = format.getLong(MediaFormat.KEY_DURATION)
+                require(durationUs <= MAX_SECONDS * 1_000_000L) {
+                    "Recording is longer than the current five-minute speech scan limit. You can still import and manually trim it."
+                }
+            }
             val mime = format.getString(MediaFormat.KEY_MIME) ?: error("Unknown audio format")
             codec = MediaCodec.createDecoderByType(mime)
             codec.configure(format, null, null, 0)
