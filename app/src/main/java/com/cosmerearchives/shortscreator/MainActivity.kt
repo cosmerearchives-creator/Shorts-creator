@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.media.MediaMetadataRetriever
+import androidx.core.view.WindowCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -45,6 +46,8 @@ class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("projects", MODE_PRIVATE) }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        window.navigationBarColor = android.graphics.Color.rgb(245, 244, 239)
         setContent {
             var projects by remember { mutableStateOf(loadProjects()) }
             var selected by remember { mutableIntStateOf(-1) }
