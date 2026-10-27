@@ -653,6 +653,8 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
             }
         }
     }
+    var waveformLoaded by remember(item.uri) { mutableStateOf(false) }
+    LaunchedEffect(waveform) { if (waveform.isNotEmpty()) waveformLoaded = true }
     var rangePlaying by remember(item.uri) { mutableStateOf(false) }
     LaunchedEffect(player, rangePlaying, endMs) {
         while (rangePlaying && player != null) {
@@ -712,7 +714,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                                 }
                             }
                         } else {
-                            Text(if (item.kind == "audio") "Loading waveform (if supported)…" else "Frames unavailable",
+                            Text(if (item.kind == "audio") "Waveform unavailable or loading…" else "Frames unavailable",
                                 modifier = Modifier.align(Alignment.Center),
                                 style = MaterialTheme.typography.bodySmall)
                         }
