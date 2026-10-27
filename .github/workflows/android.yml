@@ -21,6 +21,11 @@ jobs:
         run: |
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path "*/bin/sdkmanager" | head -n 1)"
           yes | "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" || test ${PIPESTATUS[1]} -eq 0
+      - name: Fetch pinned Whisper native sources
+        run: |
+          mkdir -p vendor
+          git clone --depth 1 --branch v1.7.6 https://github.com/ggml-org/whisper.cpp.git vendor/whisper.cpp
+          git -C vendor/whisper.cpp submodule update --init --depth 1
       - name: Decode stable signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.SHORTS_KEYSTORE_BASE64 }}
