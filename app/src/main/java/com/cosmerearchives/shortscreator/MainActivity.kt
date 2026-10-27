@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
                     val updated = projects.toMutableList()
                     val current = updated[selected]
                     val mime = contentResolver.getType(uri).orEmpty()
-                    updated[selected] = current.copy(clips = current.clips + Clip(uri.toString(), if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video", if (mime.startsWith("audio/")) 2 else selectedTrack, 0L, if (mime.startsWith("video/") || mime.startsWith("audio/")) getDuration(uri) else 0L))
+                    updated[selected] = current.copy(clips = current.clips + Clip(uri.toString(), if (mime.startsWith("audio/")) "audio" else if (mime.startsWith("image/")) "image" else "video", if (mime.startsWith("audio/")) 2 else selectedTrack, 0L, if (mime.startsWith("video/") || mime.startsWith("audio/")) getDuration(uri) else if (mime.startsWith("image/")) 5000L else 0L))
                     projects = updated
                     saveProjects(projects)
                 }
@@ -201,7 +201,7 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.height(12.dp))
                             val mainClips = project.clips.filter { it.track == 0 }
                             val overlayClips = project.clips.filter { it.track == 1 }
-                            val unsupportedOverlays = overlayClips.size > 1 || overlayClips.any { it.kind != "image" }
+                            val unsupportedOverlays = overlayClips.any { it.kind != "image" }
                             Button(
                                 enabled = mainClips.isNotEmpty() && mainClips.all { it.kind == "video" && it.endMs > it.startMs },
                                 onClick = {
@@ -212,9 +212,9 @@ class MainActivity : ComponentActivity() {
                                         }
                                     } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
                                 }
-                            ) { Text("Export timeline + image overlay") }
+                            ) { Text("Export timeline with timed images") }
                             if (overlayClips.isNotEmpty()) Text(
-                                "Note: V0.8 applies one static image over the entire video. Video overlays and multiple images are not supported.",
+                                "Note: V0.9 exports multiple image overlays at their timeline positions. Video overlays remain unsupported.",
                                 style = MaterialTheme.typography.bodySmall, color = Color(0xFF8D4738)
                             )
                             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
@@ -235,6 +235,21 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
+                            if (currentClip?.kind == "image" && currentClip.track == 1) {
+                                Text("Image duration: ${currentClip.endMs / 1000.0}s")
+                                Slider(
+                                    value = currentClip.endMs.coerceIn(500L, 30000L).toFloat(),
+                                    onValueChange = { value ->
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(endMs = value.toLong())
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                    },
+                                    onValueChangeFinished = { saveProjects(projects) },
+                                    valueRange = 500f..30000f
+                                )
+                            }
                             if (currentClip != null && currentClip.track != 0) {
                                 Text("Overlay position: ${currentClip.positionMs / 1000.0}s", style = MaterialTheme.typography.bodySmall)
                                 Slider(
