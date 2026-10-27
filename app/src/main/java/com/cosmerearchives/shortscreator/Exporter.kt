@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Color as AndroidColor
+import androidx.media3.effect.Presentation
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.StaticOverlaySettings
@@ -30,7 +31,9 @@ import java.io.File
 
 /** v0.2: a single trimmed source video; not yet a multitrack composition. */
 object Exporter {
-    fun exportTimeline(context: Context, clips: List<Clip>, callback: (String) -> Unit) {
+    fun exportTimeline(context: Context, clips: List<Clip>, ratio: String, callback: (String) -> Unit) {
+        val (outputWidth, outputHeight) = exportDimensions(ratio)
+        val presentation = Presentation.createForWidthAndHeight(outputWidth, outputHeight, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)
         val main = clips.filter { it.track == 0 }
         require(main.isNotEmpty()) { "Add main-track videos before exporting" }
         require(main.all { it.kind == "video" && it.endMs > it.startMs }) {
@@ -90,7 +93,7 @@ object Exporter {
                 }
             }
             val effects = if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()
-            EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), effects)).build()
+            EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), listOf(presentation) + effects)).build()
         }
         val mainSequence = EditedMediaItemSequence.withAudioAndVideoFrom(edits)
         val audio = clips.filter { it.track == 2 && it.kind == "audio" }
@@ -118,7 +121,7 @@ object Exporter {
         }
         val pipStart = sequences.size - pipVideos.size
         val compositor = object : VideoCompositorSettings {
-            override fun getOutputSize(inputSizes: List<Size>): Size = inputSizes.first()
+            override fun getOutputSize(inputSizes: List<Size>): Size = Size(outputWidth, outputHeight)
             override fun getOverlaySettings(inputId: Int, presentationTimeUs: Long): androidx.media3.common.OverlaySettings =
                 if (inputId >= pipStart && pipVideos.isNotEmpty()) {
                     StaticOverlaySettings.Builder()
@@ -132,7 +135,7 @@ object Exporter {
         startExport(context, output, callback) { transformer -> transformer.start(composition, output.absolutePath) }
     }
 
-    fun export(context: Context, source: String, startMs: Long, endMs: Long, callback: (String) -> Unit) {
+    fun export(context: Context, source: String, startMs: Long, endMs: Long, ratio: String, callback: (String) -> Unit) {
         val output = File(context.cacheDir, "shorts-${System.currentTimeMillis()}.mp4")
         val media = MediaItem.Builder()
             .setUri(Uri.parse(source))
@@ -142,8 +145,17 @@ object Exporter {
                     .setEndPositionMs(endMs)
                     .build()
             ).build()
-        val edited = EditedMediaItem.Builder(media).build()
+        val (width, height) = exportDimensions(ratio)
+        val presentation = Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)
+        val edited = EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), listOf(presentation))).build()
         startExport(context, output, callback) { transformer -> transformer.start(edited, output.absolutePath) }
+    }
+
+    private fun exportDimensions(ratio: String): Pair<Int, Int> = when (ratio) {
+        "9:16" -> 1080 to 1920
+        "1:1" -> 1080 to 1080
+        "4:5" -> 1080 to 1350
+        else -> 1920 to 1080
     }
 
     private fun startExport(context: Context, output: File, callback: (String) -> Unit, start: (Transformer) -> Unit) {
