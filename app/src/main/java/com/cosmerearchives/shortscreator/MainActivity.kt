@@ -364,6 +364,62 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
+                            if (currentClip != null && (currentClip.kind == "video" || currentClip.kind == "audio") && currentClip.endMs > currentClip.startMs) {
+                                val sourceDuration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
+                                if (sourceDuration > 100L) {
+                                    Text("Timeline clip trim · ${(currentClip.endMs - currentClip.startMs) / 1000.0}s selected",
+                                        fontWeight = FontWeight.SemiBold)
+                                    RangeSlider(
+                                        value = currentClip.startMs.toFloat()..currentClip.endMs.toFloat(),
+                                        onValueChange = { range ->
+                                            val cs = project.clips.toMutableList()
+                                            val start = range.start.toLong().coerceIn(0L, sourceDuration - 100L)
+                                            val end = range.endInclusive.toLong().coerceIn(start + 100L, sourceDuration)
+                                            cs[activeClip] = currentClip.copy(startMs = start, endMs = end)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                        },
+                                        onValueChangeFinished = { saveProjects(projects) },
+                                        valueRange = 0f..sourceDuration.toFloat(),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        TextButton(onClick = {
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(startMs = (currentClip.startMs - 33L).coerceAtLeast(0L))
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                            saveProjects(updated)
+                                        }) { Text("In −") }
+                                        TextButton(onClick = {
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(startMs = (currentClip.startMs + 33L).coerceAtMost(currentClip.endMs - 100L))
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                            saveProjects(updated)
+                                        }) { Text("In +") }
+                                        TextButton(onClick = {
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(endMs = (currentClip.endMs - 33L).coerceAtLeast(currentClip.startMs + 100L))
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                            saveProjects(updated)
+                                        }) { Text("Out −") }
+                                        TextButton(onClick = {
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(endMs = (currentClip.endMs + 33L).coerceAtMost(sourceDuration))
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                            saveProjects(updated)
+                                        }) { Text("Out +") }
+                                    }
+                                }
+                            }
                             if (currentClip?.kind == "text" && currentClip.track == 1) {
                                 OutlinedTextField(value = currentClip.caption, label = { Text("Caption text") },
                                     onValueChange = { value ->
@@ -629,7 +685,9 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
         }
     }
     DisposableEffect(player) { onDispose { player?.release() } }
-    val thumbnails = remember(item.uri) {
+    var thumbnails by remember(item.uri) { mutableStateOf<List<androidx.compose.ui.graphics.ImageBitmap>>(emptyList()) }
+    LaunchedEffect(item.uri) {
+        thumbnails = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         if (item.kind != "video" || duration <= 0) emptyList() else {
             val retriever = MediaMetadataRetriever()
             try {
@@ -643,6 +701,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                     }
                 }
             } catch (_: Exception) { emptyList() } finally { retriever.release() }
+        }
         }
     }
     var waveform by remember(item.uri) { mutableStateOf<List<Float>>(emptyList()) }
