@@ -1,2 +1,2 @@
-Release request: v0.5.0-alpha
-Signed versionCode 5; safe-area layout, split and timeline controls.
+Release request: v0.5.1-alpha
+Android navigation bar inset/opaque window hotfix; versionCode 6.
