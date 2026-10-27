@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
             }
             MaterialTheme(colorScheme = lightColorScheme(primary = purple, background = ivory, surface = Color.White, onSurface = ink)) {
                 Surface(color = ivory, modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                    Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (selected >= 0 || showSettings) {
                                 IconButton(onClick = { selected = -1; showSettings = false }) { Icon(Icons.Default.ArrowBack, "Back") }
@@ -124,8 +124,8 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.height(12.dp))
                             Button(onClick = { newDialog = true }) { Icon(Icons.Default.Add, null); Text(" New project") }
                             Spacer(Modifier.height(16.dp))
-                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(projects.indices.toList()) { index ->
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                projects.indices.forEach { index ->
                                     Card(onClick = { selected = index }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
                                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
                                             Text(projects[index].name, fontWeight = FontWeight.Bold)
@@ -218,7 +218,57 @@ class MainActivity : ComponentActivity() {
                                     valueRange = 0f..60000f
                                 )
                             }
-                            Text("V0.4 timeline preview: clip placement and scrubbing. Multitrack rendering, splitting and drag-to-move still upcoming.", style = MaterialTheme.typography.bodySmall)
+                            if (currentClip != null) {
+                                val durations = project.clips.map { (it.endMs - it.startMs).coerceAtLeast(0L) }
+                                val clipStart = if (currentClip.track == 0) project.clips.indices
+                                    .filter { it < activeClip && project.clips[it].track == 0 }.sumOf { durations[it] }
+                                    else currentClip.positionMs
+                                val splitOffset = playheadMs - clipStart
+                                val canSplit = currentClip.kind == "video" && splitOffset >= 100L &&
+                                    splitOffset <= durations[activeClip] - 100L
+                                Button(enabled = canSplit, onClick = {
+                                    val cut = currentClip.startMs + splitOffset
+                                    val cs = project.clips.toMutableList()
+                                    cs[activeClip] = currentClip.copy(endMs = cut)
+                                    cs.add(activeClip + 1, currentClip.copy(startMs = cut,
+                                        positionMs = if (currentClip.track == 0) 0L else playheadMs))
+                                    val updated = projects.toMutableList()
+                                    updated[selected] = project.copy(clips = cs)
+                                    projects = updated
+                                    saveProjects(updated)
+                                    activeClip += 1
+                                }) { Text("Split at playhead") }
+                                if (currentClip.track == 0) {
+                                    val mainIndices = project.clips.indices.filter { project.clips[it].track == 0 }
+                                    val place = mainIndices.indexOf(activeClip)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(enabled = place > 0, onClick = {
+                                            val cs = project.clips.toMutableList()
+                                            val previous = mainIndices[place - 1]
+                                            val item = cs.removeAt(activeClip)
+                                            cs.add(previous, item)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                            saveProjects(updated)
+                                            activeClip = previous
+                                        }) { Text("Move left") }
+                                        OutlinedButton(enabled = place >= 0 && place < mainIndices.lastIndex, onClick = {
+                                            val cs = project.clips.toMutableList()
+                                            val next = mainIndices[place + 1]
+                                            val item = cs.removeAt(activeClip)
+                                            cs.add(next, item)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                            saveProjects(updated)
+                                            activeClip = next
+                                        }) { Text("Move right") }
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(48.dp))
+                            Text("V0.5: scrollable timeline, splitting and clip rearrangement. Full multitrack export remains a later milestone.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     if (newDialog) {
