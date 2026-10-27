@@ -200,7 +200,8 @@ class MainActivity : ComponentActivity() {
                             }
                             Spacer(Modifier.height(12.dp))
                             val mainClips = project.clips.filter { it.track == 0 }
-                            val hasUnrenderedTracks = project.clips.any { it.track == 1 }
+                            val overlayClips = project.clips.filter { it.track == 1 }
+                            val unsupportedOverlays = overlayClips.size > 1 || overlayClips.any { it.kind != "image" }
                             Button(
                                 enabled = mainClips.isNotEmpty() && mainClips.all { it.kind == "video" && it.endMs > it.startMs },
                                 onClick = {
@@ -211,9 +212,9 @@ class MainActivity : ComponentActivity() {
                                         }
                                     } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
                                 }
-                            ) { Text("Export video + audio timeline") }
-                            if (hasUnrenderedTracks) Text(
-                                "Note: overlay and image tracks are NOT included in this export yet.",
+                            ) { Text("Export timeline + image overlay") }
+                            if (overlayClips.isNotEmpty()) Text(
+                                "Note: V0.8 applies one static image over the entire video. Video overlays and multiple images are not supported.",
                                 style = MaterialTheme.typography.bodySmall, color = Color(0xFF8D4738)
                             )
                             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
