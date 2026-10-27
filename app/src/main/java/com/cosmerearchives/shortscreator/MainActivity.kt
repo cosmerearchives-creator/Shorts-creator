@@ -10,6 +10,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -163,6 +169,41 @@ class MainActivity : ComponentActivity() {
                                 Box(Modifier.fillMaxWidth().height(230.dp).background(dark, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
                                     Text(if (currentClip?.kind == "audio") "Audio track selected" else "Import a video to preview", color = Color.White)
                                 }
+                            }
+                            if (currentClip?.kind == "text" && currentClip.track == 1) {
+                                var previewSize by remember { mutableStateOf(IntSize.Zero) }
+                                val color = Color(currentClip.textColor)
+                                Box(Modifier.fillMaxWidth().height(230.dp).background(dark, RoundedCornerShape(12.dp))
+                                    .onSizeChanged { previewSize = it }) {
+                                    val x = ((currentClip.textX + 1f) / 2f * previewSize.width).toInt()
+                                    val y = ((1f - currentClip.textY) / 2f * previewSize.height).toInt()
+                                    Text(currentClip.caption, color = color,
+                                        fontSize = (currentClip.textSize * 0.42f).sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.align(Alignment.TopStart)
+                                            .offset { androidx.compose.ui.unit.IntOffset(x - previewSize.width / 4, y - 24) }
+                                            .width(180.dp)
+                                            .pointerInput(activeClip, previewSize) {
+                                                detectDragGestures { change, drag ->
+                                                    change.consume()
+                                                    if (previewSize.width > 0 && previewSize.height > 0) {
+                                                        val clips = projects[selected].clips.toMutableList()
+                                                        val item = clips.getOrNull(activeClip)
+                                                        if (item != null && item.kind == "text") {
+                                                            clips[activeClip] = item.copy(
+                                                                textX = (item.textX + 2f * drag.x / previewSize.width).coerceIn(-0.85f, 0.85f),
+                                                                textY = (item.textY - 2f * drag.y / previewSize.height).coerceIn(-0.85f, 0.85f))
+                                                            val updated = projects.toMutableList()
+                                                            updated[selected] = project.copy(clips = clips)
+                                                            projects = updated
+                                                            saveProjects(updated)
+                                                        }
+                                                    }
+                                                }
+                                            })
+                                }
+                                Text("Drag the text to position it. Export uses your saved coordinates.",
+                                    style = MaterialTheme.typography.bodySmall)
                             }
                             Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
