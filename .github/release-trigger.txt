@@ -1,2 +1,2 @@
-Release request: v0.23.0-alpha
-Version code 24 - drag image overlays
+Release request: v0.24.0-alpha
+Version code 25 - image pinch resize
