@@ -1,2 +1,2 @@
-Release request: v0.24.0-alpha
-Version code 25 - image pinch resize
+Release request: v0.25.0-alpha
+Version code 26 - persistence optimization
