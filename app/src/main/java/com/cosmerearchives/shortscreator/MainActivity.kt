@@ -144,8 +144,21 @@ class MainActivity : ComponentActivity() {
                             var activeClip by remember(selected) { mutableIntStateOf(0) }
                             var playheadMs by remember(selected) { mutableLongStateOf(0L) }
                             val currentClip = project.clips.getOrNull(activeClip)
-                            if (currentClip != null && currentClip.kind == "video") {
-                                key(currentClip.uri, currentClip.startMs, currentClip.endMs) { VideoPreview(currentClip.uri, currentClip.startMs, currentClip.endMs, playheadMs) }
+                            var previewStart = 0L
+                            val previewIndex = project.clips.indices.firstOrNull { i ->
+                                if (project.clips[i].track != 0) false else {
+                                    val span = (project.clips[i].endMs - project.clips[i].startMs).coerceAtLeast(0L)
+                                    val inside = playheadMs >= previewStart && playheadMs < previewStart + span
+                                    if (!inside) previewStart += span
+                                    inside
+                                }
+                            }
+                            val previewClip = previewIndex?.let { project.clips[it] }
+                            if (previewClip != null && previewClip.kind == "video") {
+                                val seekMs = (playheadMs - previewStart).coerceAtLeast(0L)
+                                key(previewClip.uri, previewClip.startMs, previewClip.endMs) {
+                                    VideoPreview(previewClip.uri, previewClip.startMs, previewClip.endMs, seekMs)
+                                }
                             } else {
                                 Box(Modifier.fillMaxWidth().height(230.dp).background(dark, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
                                     Text(if (currentClip?.kind == "audio") "Audio track selected" else "Import a video to preview", color = Color.White)
