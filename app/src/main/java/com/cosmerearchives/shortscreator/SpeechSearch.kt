@@ -91,6 +91,23 @@ class TranscriptCache(private val context: Context) {
         }
     } catch (_: Exception) { null }
 
+    fun copyEntries(sourceKey: String, destinationKey: String) {
+        val origin = File(directory, "$sourceKey.json")
+        if (!origin.exists()) load(sourceKey)
+        File(directory, "$sourceKey.json").takeIf { it.exists() }?.copyTo(
+            File(directory, "$destinationKey.json"), overwrite = true
+        )
+        directory.listFiles()?.filter { it.name.startsWith("$sourceKey-chunk-") && it.extension == "json" }
+            ?.forEach { file -> file.copyTo(File(directory, destinationKey + file.name.removePrefix(sourceKey)), overwrite = true) }
+    }
+
+    fun deleteEntries(key: String): Int {
+        val files = directory.listFiles()?.filter {
+            it.name == "$key.json" || (it.name.startsWith("$key-chunk-") && it.extension == "json")
+        }.orEmpty()
+        return files.count { it.delete() }
+    }
+
     fun save(key: String, words: List<SpokenWord>) {
         val data = JSONArray()
         words.forEach { data.put(JSONObject().put("text", it.text).put("start", it.startMs).put("end", it.endMs)) }
