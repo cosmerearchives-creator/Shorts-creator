@@ -227,17 +227,36 @@ class MainActivity : ComponentActivity() {
                                                 val px = ((overlay.pipX + 1f) * previewSize.width / 2f - pipWidth / 2f).toInt()
                                                 val py = ((1f - overlay.pipY) * previewSize.height / 2f - 40).toInt()
                                                 key(overlay.uri, overlay.startMs, overlay.endMs) {
-                                                    VideoPreview(overlay.uri, overlay.startMs, overlay.endMs, pipTime,
-                                                        Modifier.offset { androidx.compose.ui.unit.IntOffset(px, py) }
-                                                            .width(with(androidx.compose.ui.platform.LocalDensity.current) { pipWidth.toDp() })
-                                                            .height(85.dp))
+                                                    Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(px, py) }
+                                                        .width(with(androidx.compose.ui.platform.LocalDensity.current) { pipWidth.toDp() })
+                                                        .height(85.dp)
+                                                        .pointerInput(clipIndex, previewSize) {
+                                                            detectDragGestures { change, drag ->
+                                                                change.consume()
+                                                                if (previewSize.width > 0 && previewSize.height > 0) {
+                                                                    val cs = projects[selected].clips.toMutableList()
+                                                                    val item = cs.getOrNull(clipIndex)
+                                                                    if (item != null && item.kind == "video") {
+                                                                        cs[clipIndex] = item.copy(
+                                                                            pipX = (item.pipX + 2f * drag.x / previewSize.width).coerceIn(-0.9f, 0.9f),
+                                                                            pipY = (item.pipY - 2f * drag.y / previewSize.height).coerceIn(-0.9f, 0.9f))
+                                                                        val updated = projects.toMutableList()
+                                                                        updated[selected] = projects[selected].copy(clips = cs)
+                                                                        projects = updated
+                                                                        saveProjects(updated)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }) {
+                                                        VideoPreview(overlay.uri, overlay.startMs, overlay.endMs, pipTime, Modifier.fillMaxSize())
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                            Text("Preview shows active overlays at the playhead. Drag visible captions to position them.",
+                            Text("Preview shows overlays at the playhead. Drag captions and PiP video to reposition; select PiP to resize with its slider.",
                                 style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
