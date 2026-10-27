@@ -25,7 +25,7 @@ Java_com_cosmerearchives_shortscreator_NativeWhisper_recognize(JNIEnv* env, jobj
     p.print_realtime = false;
     p.print_progress = false;
     p.token_timestamps = true;
-    p.max_len = 1;
+    p.max_len = 0;
     p.split_on_word = true;
     int result = whisper_full(ctx, p, audio.data(), static_cast<int>(audio.size()));
     if (result != 0) {
