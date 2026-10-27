@@ -1146,7 +1146,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                 }
             }
         }
-    )
+    }
 }
 
 private val waveformCache = object : android.util.LruCache<String, List<Float>>(32) {}
