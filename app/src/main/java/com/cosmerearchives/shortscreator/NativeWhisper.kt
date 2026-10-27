@@ -86,7 +86,7 @@ class NativeWhisper(private val context: Context) : SpeechTranscriber {
                 currentCoroutineContext().ensureActive()
                 val decoded = if (audio.isEmpty()) emptyList() else
                     recognize(modelFile.absolutePath, audio).mapNotNull { line ->
-                        val fields = line.split('\\t')
+                        val fields = line.split('\t')
                         if (fields.size != 3) null else {
                             val from = fields[1].toLongOrNull()
                             val to = fields[2].toLongOrNull()
