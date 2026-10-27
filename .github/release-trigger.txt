@@ -1,2 +1,2 @@
 Release request: v0.35.0-alpha
-Version code 36 - retry with explicit NDK provisioning after failed installation
+Version code 36 - fixed Kotlin Dialog brace and retry signed APK build
