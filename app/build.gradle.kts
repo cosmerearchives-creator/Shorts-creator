@@ -12,8 +12,8 @@ android {
         applicationId = "com.cosmerearchives.shortscreator"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.10.0-alpha"
+        versionCode = 12
+        versionName = "0.11.0-alpha"
     }
 
     val releaseStore = System.getenv("SHORTS_KEYSTORE_PATH")
