@@ -1,2 +1,2 @@
-Release request: v0.32.0-alpha
-Version code 33 - apply project aspect ratio to composed video and verify encoded dimensions
+Release request: v0.33.0-alpha
+Version code 34 - offline Whisper speech scanning, transcript search and context trim
