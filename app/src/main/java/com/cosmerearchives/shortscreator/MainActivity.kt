@@ -64,6 +64,20 @@ private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
 data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f)
+data class LibraryMedia(val uri: String, val kind: String, val startMs: Long, val endMs: Long)
+private fun readLibrary(context: android.content.Context): List<LibraryMedia> = try {
+    val data = JSONArray(context.getSharedPreferences("media_library", android.content.Context.MODE_PRIVATE).getString("items", "[]"))
+    (0 until data.length()).map { index ->
+        val o = data.getJSONObject(index)
+        LibraryMedia(o.getString("uri"), o.getString("kind"), o.getLong("start"), o.getLong("end"))
+    }
+} catch (_: Exception) { emptyList() }
+private fun writeLibrary(context: android.content.Context, items: List<LibraryMedia>) {
+    val data = JSONArray()
+    items.forEach { data.put(JSONObject().put("uri", it.uri).put("kind", it.kind).put("start", it.startMs).put("end", it.endMs)) }
+    context.getSharedPreferences("media_library", android.content.Context.MODE_PRIVATE)
+        .edit().putString("items", data.toString()).apply()
+}
 data class PendingImport(val uri: String, val kind: String, val track: Int, val durationMs: Long)
 data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList())
 
@@ -87,6 +101,8 @@ class MainActivity : ComponentActivity() {
             var downloading by remember { mutableStateOf(false) }
             var exportStatus by remember { mutableStateOf("") }
             var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
+            var libraryItems by remember { mutableStateOf(readLibrary(this@MainActivity)) }
+            var showLibrary by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
                 thread { try {
                     val found = AppUpdater.latest(this@MainActivity)
@@ -94,7 +110,7 @@ class MainActivity : ComponentActivity() {
                 } catch (_: Exception) { /* quiet startup failure; manual check shows errors */ } }
             }
             val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-                if (uri != null && selected in projects.indices) {
+                if (uri != null) {
                     try {
                         contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     } catch (_: SecurityException) { }
@@ -303,8 +319,8 @@ class MainActivity : ComponentActivity() {
                                 style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { selectedTrack = 0; launcher.launch(arrayOf("video/*", "audio/*")) }) { Text("Import") }
-                                OutlinedButton(onClick = { selectedTrack = 1; launcher.launch(arrayOf("video/*", "image/*", "audio/*")) }) { Text("Add overlay") }
+                                Button(onClick = { selectedTrack = 0; showLibrary = true }) { Text("Media library") }
+                                OutlinedButton(onClick = { selectedTrack = 1; showLibrary = true }) { Text("Add overlay") }
                                 OutlinedButton(onClick = {
                                     val updated = projects.toMutableList()
                                     val cs = project.clips + Clip("", "text", 1, 0L, 5000L, playheadMs, caption = "New title")
@@ -615,18 +631,69 @@ class MainActivity : ComponentActivity() {
                             Text("V0.5: scrollable timeline, splitting and clip rearrangement. Full multitrack export remains a later milestone.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
+                    if (showLibrary) {
+                        Surface(color = ivory, modifier = Modifier.fillMaxSize()) {
+                            Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = { showLibrary = false }) { Icon(Icons.Default.ArrowBack, "Back") }
+                                    Text("Media library", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                                }
+                                Button(onClick = { launcher.launch(arrayOf("video/*", "audio/*", "image/*")) }) {
+                                    Text("Import files into library")
+                                }
+                                Text("Imported media stays in your library. Choose Add to timeline when you're ready.",
+                                    style = MaterialTheme.typography.bodySmall)
+                                if (libraryItems.isEmpty()) Text("Your library is empty. Import a file to get started.")
+                                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    libraryItems.forEachIndexed { index, item ->
+                                        ElevatedCard(Modifier.fillMaxWidth()) {
+                                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Text(item.kind.uppercase(), style = MaterialTheme.typography.labelSmall)
+                                                Text(Uri.parse(item.uri).lastPathSegment ?: "Media file", maxLines = 2)
+                                                Text("Selection: ${"%.1f".format(item.startMs / 1000.0)}s – ${"%.1f".format(item.endMs / 1000.0)}s",
+                                                    style = MaterialTheme.typography.bodySmall)
+                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Button(onClick = {
+                                                        if (selected in projects.indices) {
+                                                            val updated = projects.toMutableList()
+                                                            val project = updated[selected]
+                                                            val track = if (item.kind == "audio") 2 else selectedTrack
+                                                            updated[selected] = project.copy(clips = project.clips +
+                                                                Clip(item.uri, item.kind, track, item.startMs, item.endMs))
+                                                            projects = updated
+                                                            saveProjects(updated)
+                                                            showLibrary = false
+                                                        }
+                                                    }, enabled = selected in projects.indices && !(item.kind == "image" && selectedTrack == 0)) {
+                                                        Text("Add to timeline")
+                                                    }
+                                                    TextButton(onClick = {
+                                                        pendingImport = PendingImport(item.uri, item.kind, selectedTrack,
+                                                            if (item.kind == "image") 5000L else getDuration(Uri.parse(item.uri)))
+                                                    }) { Text("Trim / Search") }
+                                                    TextButton(onClick = {
+                                                        libraryItems = libraryItems.filterIndexed { i, _ -> i != index }
+                                                        writeLibrary(this@MainActivity, libraryItems)
+                                                    }) { Text("Remove") }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     pendingImport?.let { pending ->
                         ImportReviewDialog(pending,
                             onCancel = { pendingImport = null },
                             onConfirm = { start, end ->
-                                if (selected in projects.indices) {
-                                    val updated = projects.toMutableList()
-                                    val project = updated[selected]
-                                    updated[selected] = project.copy(clips = project.clips +
-                                        Clip(pending.uri, pending.kind, pending.track, start, end))
-                                    projects = updated
-                                    saveProjects(updated)
-                                }
+                                val updated = libraryItems.toMutableList()
+                                val entry = LibraryMedia(pending.uri, pending.kind, start, end)
+                                val prior = updated.indexOfFirst { it.uri == pending.uri }
+                                if (prior >= 0) updated[prior] = entry else updated.add(entry)
+                                libraryItems = updated
+                                writeLibrary(this@MainActivity, updated)
                                 pendingImport = null
                             })
                     }
