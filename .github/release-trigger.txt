@@ -1,2 +1,2 @@
-Release request: v0.33.0-alpha
-Version code 34 - offline Whisper speech scanning, transcript search and context trim
+Release request: v0.34.0-alpha
+Version code 35 - visible speech scan stages, transcript inspection and clear search feedback
