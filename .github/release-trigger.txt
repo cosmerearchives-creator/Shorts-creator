@@ -1,2 +1,2 @@
-Release request: v0.36.0-alpha
-Version code 37 - prevent long audio waveform overload and reject oversized speech scans before decoding
+Release request: v0.37.0-alpha
+Version code 38 - bounded chunked speech scanning and resumable transcript sections
