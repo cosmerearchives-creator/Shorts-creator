@@ -1,2 +1,2 @@
-Release request: v0.10.0-alpha
-Version code 11. Picture-in-picture timed video overlays.
+Release request: v0.11.0-alpha
+Version code 12. Adjustable picture-in-picture size and XY position.
