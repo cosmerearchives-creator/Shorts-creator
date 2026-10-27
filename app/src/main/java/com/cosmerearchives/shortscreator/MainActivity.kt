@@ -811,6 +811,21 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
             kotlinx.coroutines.delay(50L)
         }
     }
+    var speechQuery by remember(item.uri) { mutableStateOf("") }
+    var transcriptWords by remember(item.uri) { mutableStateOf<List<SpokenWord>?>(null) }
+    var speechStatus by remember(item.uri) { mutableStateOf("Not scanned") }
+    var beforeSeconds by remember(item.uri) { mutableFloatStateOf(2f) }
+    var afterSeconds by remember(item.uri) { mutableFloatStateOf(2f) }
+    var selectedMatch by remember(item.uri) { mutableIntStateOf(-1) }
+    LaunchedEffect(item.uri) {
+        transcriptWords = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            TranscriptCache(context).load(TranscriptCache(context).sourceKey(Uri.parse(item.uri), "whisper-tiny.en-v1"))
+        }
+        if (transcriptWords != null) speechStatus = "Cached transcript loaded"
+    }
+    val speechMatches = remember(transcriptWords, speechQuery) {
+        SpeechSearch.find(transcriptWords.orEmpty(), speechQuery)
+    }
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Preview and trim " + item.kind) },
@@ -917,6 +932,55 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                     }
                 }
                 if (item.kind != "image" && duration > 0L) {
+                    HorizontalDivider()
+                    Text("Search & Trim", fontWeight = FontWeight.SemiBold)
+                    Text(speechStatus, style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = {
+                        speechStatus = "Speech scanning requires the offline Whisper engine, which is not yet installed in this build."
+                    }) { Text("Scan speech") }
+                    if (transcriptWords != null) {
+                        OutlinedTextField(
+                            value = speechQuery,
+                            onValueChange = { speechQuery = it; selectedMatch = -1 },
+                            label = { Text("Find spoken word or phrase") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text("${speechMatches.size} matches", style = MaterialTheme.typography.bodySmall)
+                        speechMatches.take(25).forEachIndexed { index, match ->
+                            TextButton(onClick = {
+                                selectedMatch = index
+                                val selection = SpeechSearch.select(
+                                    match, (beforeSeconds * 1000).toLong(),
+                                    (afterSeconds * 1000).toLong(), duration
+                                )
+                                startMs = selection.startMs
+                                endMs = selection.endMs
+                                player?.seekTo(startMs)
+                            }) {
+                                Text("Match ${index + 1}: ${"%.2f".format(java.util.Locale.US, match.startMs / 1000.0)}s – ${"%.2f".format(java.util.Locale.US, match.endMs / 1000.0)}s")
+                            }
+                        }
+                        if (speechMatches.isNotEmpty()) {
+                            Text("Before phrase: ${beforeSeconds}s")
+                            Slider(value = beforeSeconds, onValueChange = {
+                                beforeSeconds = it
+                                speechMatches.getOrNull(selectedMatch)?.let { match ->
+                                    val range = SpeechSearch.select(match, (beforeSeconds * 1000).toLong(), (afterSeconds * 1000).toLong(), duration)
+                                    startMs = range.startMs; endMs = range.endMs
+                                }
+                            }, valueRange = 0f..15f, steps = 29)
+                            Text("After phrase: ${afterSeconds}s")
+                            Slider(value = afterSeconds, onValueChange = {
+                                afterSeconds = it
+                                speechMatches.getOrNull(selectedMatch)?.let { match ->
+                                    val range = SpeechSearch.select(match, (beforeSeconds * 1000).toLong(), (afterSeconds * 1000).toLong(), duration)
+                                    startMs = range.startMs; endMs = range.endMs
+                                }
+                            }, valueRange = 0f..15f, steps = 29)
+                        }
+                    }
+                    HorizontalDivider()
                     Text("In point: ${"%.2f".format(java.util.Locale.US, startMs / 1000.0)}s")
                     Slider(value = startMs.toFloat(), valueRange = 0f..duration.toFloat(),
                         onValueChange = {
