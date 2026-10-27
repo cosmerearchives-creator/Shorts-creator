@@ -1,2 +1,2 @@
-Release request: v0.12.0-alpha
-Version code 13. Editable timed text captions and title overlays.
+Release request: v0.13.0-alpha
+Version code 14. Caption font size, color palette, and text positioning.
