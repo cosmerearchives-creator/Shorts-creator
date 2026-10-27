@@ -1,2 +1,2 @@
-Release request: v0.39.0-alpha
-Version code 40 - project deletion, bulk deletion, offline media copies and transcript cleanup
+Release request: v0.40.0-alpha
+Audio main-track import and equalizer video generation
