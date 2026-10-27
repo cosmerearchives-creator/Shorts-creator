@@ -39,7 +39,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "")
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f)
 data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList())
 
 class MainActivity : ComponentActivity() {
@@ -266,6 +266,40 @@ class MainActivity : ComponentActivity() {
                                         projects = updated
                                         saveProjects(updated)
                                     }, modifier = Modifier.fillMaxWidth())
+                                Text("Font size")
+                                Slider(value = currentClip.textSize.coerceIn(24f, 110f), valueRange = 24f..110f,
+                                    onValueChange = { v ->
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(textSize = v)
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                    }, onValueChangeFinished = { saveProjects(projects) })
+                                Text("Text color")
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    listOf("White" to -1, "Black" to -16777216, "Yellow" to -256, "Purple" to -10066330).forEach { (label, value) ->
+                                        TextButton(onClick = {
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(textColor = value)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                            saveProjects(updated)
+                                        }) { Text(label) }
+                                    }
+                                }
+                                listOf("Text horizontal" to 0, "Text vertical" to 1).forEach { (label, axis) ->
+                                    Text(label)
+                                    Slider(value = if (axis == 0) currentClip.textX else currentClip.textY,
+                                        valueRange = -0.85f..0.85f,
+                                        onValueChange = { v ->
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = if (axis == 0) currentClip.copy(textX = v) else currentClip.copy(textY = v)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                        }, onValueChangeFinished = { saveProjects(projects) })
+                                }
                                 Text("Caption duration: ${currentClip.endMs / 1000.0}s")
                                 Slider(value = currentClip.endMs.coerceIn(500L, 30000L).toFloat(),
                                     valueRange = 500f..30000f,
@@ -427,7 +461,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""))
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat())
             })
         }
     } catch (_: Exception) { emptyList() }
@@ -436,7 +470,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption)) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble())) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("clips", clips))
         }
         prefs.edit().putString("data", arr.toString()).apply()
