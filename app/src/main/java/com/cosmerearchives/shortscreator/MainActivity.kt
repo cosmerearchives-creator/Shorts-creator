@@ -11,6 +11,7 @@ import java.nio.ByteOrder
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Canvas
@@ -61,7 +62,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f)
 data class PendingImport(val uri: String, val kind: String, val track: Int, val durationMs: Long)
 data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList())
 
@@ -238,50 +239,22 @@ class MainActivity : ComponentActivity() {
                                                     Image(bitmap, "Image overlay",
                                                         modifier = Modifier.align(Alignment.Center)
                                                             .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
-                                                            .fillMaxWidth(0.7f).height(150.dp)
+                                                            .fillMaxWidth((0.7f * overlay.imageScale).coerceIn(0.1f, 1f)).height((150f * overlay.imageScale).dp)
                                                             .pointerInput(clipIndex, previewSize) {
-                                                                detectDragGestures { change, drag ->
-                                                                    change.consume()
+                                                                detectTransformGestures { _, pan, zoom, _ ->
                                                                     if (previewSize.width > 0 && previewSize.height > 0) {
                                                                         val cs = projects[selected].clips.toMutableList()
                                                                         val item = cs.getOrNull(clipIndex)
                                                                         if (item != null && item.kind == "image") {
                                                                             cs[clipIndex] = item.copy(
-                                                                                imageX = (item.imageX + 2f * drag.x / previewSize.width).coerceIn(-0.9f, 0.9f),
-                                                                                imageY = (item.imageY - 2f * drag.y / previewSize.height).coerceIn(-0.9f, 0.9f))
+                                                                                imageX = (item.imageX + 2f * pan.x / previewSize.width).coerceIn(-0.9f, 0.9f),
+                                                                                imageY = (item.imageY - 2f * pan.y / previewSize.height).coerceIn(-0.9f, 0.9f),
+                                                                                imageScale = (item.imageScale * zoom).coerceIn(0.2f, 2f))
                                                                             val updated = projects.toMutableList()
                                                                             updated[selected] = projects[selected].copy(clips = cs)
                                                                             projects = updated
                                                                             saveProjects(updated)
                                                                         }
-                                                                    }
-                                                                }
-                                                            })
-                                                }
-                                            }
-                                            "video" -> {
-                                                val pipTime = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
-                                                val pipWidth = (previewSize.width * overlay.pipScale).toInt().coerceAtLeast(1)
-                                                val px = ((overlay.pipX + 1f) * previewSize.width / 2f - pipWidth / 2f).toInt()
-                                                val py = ((1f - overlay.pipY) * previewSize.height / 2f - 40).toInt()
-                                                key(overlay.uri, overlay.startMs, overlay.endMs) {
-                                                    Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(px, py) }
-                                                        .width(with(androidx.compose.ui.platform.LocalDensity.current) { pipWidth.toDp() })
-                                                        .height(85.dp)
-                                                        .pointerInput(clipIndex, previewSize) {
-                                                            detectDragGestures { change, drag ->
-                                                                change.consume()
-                                                                if (previewSize.width > 0 && previewSize.height > 0) {
-                                                                    val cs = projects[selected].clips.toMutableList()
-                                                                    val item = cs.getOrNull(clipIndex)
-                                                                    if (item != null && item.kind == "video") {
-                                                                        cs[clipIndex] = item.copy(
-                                                                            pipX = (item.pipX + 2f * drag.x / previewSize.width).coerceIn(-0.9f, 0.9f),
-                                                                            pipY = (item.pipY - 2f * drag.y / previewSize.height).coerceIn(-0.9f, 0.9f))
-                                                                        val updated = projects.toMutableList()
-                                                                        updated[selected] = projects[selected].copy(clips = cs)
-                                                                        projects = updated
-                                                                        saveProjects(updated)
                                                                     }
                                                                 }
                                                             }
@@ -673,7 +646,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat())
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat())
             })
         }
     } catch (_: Exception) { emptyList() }
@@ -682,7 +655,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble())) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble())) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("clips", clips))
         }
         prefs.edit().putString("data", arr.toString()).apply()
