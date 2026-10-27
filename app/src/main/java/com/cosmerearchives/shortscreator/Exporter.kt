@@ -160,6 +160,7 @@ object Exporter {
 
     private fun startExport(context: Context, output: File, callback: (String) -> Unit, start: (Transformer) -> Unit) {
         val transformer = Transformer.Builder(context)
+            .setVideoMimeType(androidx.media3.common.MimeTypes.VIDEO_H264)
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                     var destination: Uri? = null
