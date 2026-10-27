@@ -12,9 +12,13 @@ android {
         applicationId = "com.cosmerearchives.shortscreator"
         minSdk = 26
         targetSdk = 35
-        versionCode = 33
-        versionName = "0.32.0-alpha"
+        ndk { abiFilters += listOf("arm64-v8a") }
+        externalNativeBuild { cmake { cppFlags += "-std=c++17" } }
+        versionCode = 34
+        versionName = "0.33.0-alpha"
     }
+
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
 
     val releaseStore = System.getenv("SHORTS_KEYSTORE_PATH")
     signingConfigs {
