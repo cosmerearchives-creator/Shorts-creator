@@ -1,2 +1,2 @@
 Release request: v0.35.0-alpha
-Version code 36 - full-screen scrollable import review and reusable persistent media library
+Version code 36 - retry with explicit NDK provisioning after failed installation
