@@ -684,64 +684,72 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                 } else {
                     Text("Image selected (images use a default 5-second duration).")
                 }
-                if (thumbnails.isNotEmpty()) {
-                    Text("Video frames", style = MaterialTheme.typography.labelMedium)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        thumbnails.forEach { bitmap ->
-                            Image(bitmap, "Video frame", Modifier.weight(1f).height(42.dp))
-                        }
-                    }
-                }
-                if (item.kind == "audio" && duration > 0L) {
-                    Text("Audio range", style = MaterialTheme.typography.labelMedium)
-                    if (waveform.isNotEmpty()) {
-                        Canvas(Modifier.fillMaxWidth().height(55.dp)) {
-                            val step = size.width / waveform.size
-                            waveform.forEachIndexed { index, peak ->
-                                val x = index * step
-                                val half = (peak.coerceIn(0f, 1f) * size.height * 0.48f).coerceAtLeast(1f)
-                                drawLine(Color(0xFF685B86), Offset(x, size.height / 2f - half),
-                                    Offset(x, size.height / 2f + half), strokeWidth = step.coerceAtLeast(1f))
-                            }
-                        }
-                    } else {
-                        Text("Waveform unavailable for this file; trim using playback.", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
                 if (item.kind != "image" && duration > 0L) {
+                    Text(if (item.kind == "video") "Video trim range" else "Audio trim range",
+                        style = MaterialTheme.typography.labelMedium)
                     var stripWidth by remember { mutableIntStateOf(0) }
-                    Box(Modifier.fillMaxWidth().height(34.dp).background(lavender, RoundedCornerShape(5.dp))
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    val handleWidth = with(density) { 14.dp.toPx() }
+                    Box(Modifier.fillMaxWidth().height(66.dp)
+                        .background(lavender, RoundedCornerShape(6.dp))
                         .onSizeChanged { stripWidth = it.width }) {
-                        val startFraction = startMs.toFloat() / duration
-                        val endFraction = endMs.toFloat() / duration
-                        Box(Modifier.fillMaxHeight().width(12.dp)
-                            .offset { androidx.compose.ui.unit.IntOffset((stripWidth * startFraction).toInt() - 6, 0) }
-                            .background(purple, RoundedCornerShape(3.dp))
-                            .pointerInput(stripWidth, duration) {
-                                detectDragGestures { change, delta ->
-                                    change.consume()
-                                    if (stripWidth > 0) {
+                        if (item.kind == "video" && thumbnails.isNotEmpty()) {
+                            Row(Modifier.fillMaxSize()) {
+                                thumbnails.forEach { bitmap ->
+                                    Image(bitmap, "Video frame", Modifier.weight(1f).fillMaxHeight(),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+                                }
+                            }
+                        } else if (item.kind == "audio" && waveform.isNotEmpty()) {
+                            Canvas(Modifier.fillMaxSize()) {
+                                val step = size.width / waveform.size
+                                waveform.forEachIndexed { i, peak ->
+                                    val half = (peak.coerceIn(0f, 1f) * size.height * 0.46f).coerceAtLeast(1f)
+                                    val x = (i + 0.5f) * step
+                                    drawLine(purple, Offset(x, size.height / 2f - half),
+                                        Offset(x, size.height / 2f + half),
+                                        strokeWidth = step.coerceAtLeast(1f))
+                                }
+                            }
+                        } else {
+                            Text(if (item.kind == "audio") "Loading waveform (if supported)…" else "Frames unavailable",
+                                modifier = Modifier.align(Alignment.Center),
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (stripWidth > 0) {
+                            val left = (stripWidth * startMs.toFloat() / duration).toInt()
+                            val right = (stripWidth * endMs.toFloat() / duration).toInt()
+                            Canvas(Modifier.fillMaxSize()) {
+                                drawRect(Color.Black.copy(alpha = 0.5f), size = androidx.compose.ui.geometry.Size(left.toFloat(), size.height))
+                                drawRect(Color.Black.copy(alpha = 0.5f), topLeft = Offset(right.toFloat(), 0f),
+                                    size = androidx.compose.ui.geometry.Size((size.width - right).coerceAtLeast(0f), size.height))
+                                drawRect(purple.copy(alpha = 0.12f), topLeft = Offset(left.toFloat(), 0f),
+                                    size = androidx.compose.ui.geometry.Size((right - left).coerceAtLeast(0).toFloat(), size.height))
+                            }
+                            Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(left - (handleWidth / 2f).toInt(), 0) }
+                                .width(14.dp).fillMaxHeight().background(purple, RoundedCornerShape(3.dp))
+                                .pointerInput(stripWidth, duration) {
+                                    detectDragGestures { change, delta ->
+                                        change.consume()
                                         startMs = (startMs + (delta.x / stripWidth * duration).toLong())
                                             .coerceIn(0L, (endMs - 100L).coerceAtLeast(0L))
                                         player?.seekTo(startMs)
                                     }
-                                }
-                            })
-                        Box(Modifier.fillMaxHeight().width(12.dp)
-                            .offset { androidx.compose.ui.unit.IntOffset((stripWidth * endFraction).toInt() - 6, 0) }
-                            .background(purple, RoundedCornerShape(3.dp))
-                            .pointerInput(stripWidth, duration) {
-                                detectDragGestures { change, delta ->
-                                    change.consume()
-                                    if (stripWidth > 0) {
+                                })
+                            Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(right - (handleWidth / 2f).toInt(), 0) }
+                                .width(14.dp).fillMaxHeight().background(purple, RoundedCornerShape(3.dp))
+                                .pointerInput(stripWidth, duration) {
+                                    detectDragGestures { change, delta ->
+                                        change.consume()
                                         endMs = (endMs + (delta.x / stripWidth * duration).toLong())
                                             .coerceIn((startMs + 100L).coerceAtMost(duration), duration)
-                                        player?.seekTo(endMs.coerceAtLeast(1L) - 1L)
+                                        player?.seekTo((endMs - 1L).coerceAtLeast(startMs))
                                     }
-                                }
-                            })
+                                })
+                        }
                     }
-                    Text("Drag purple handles to change in/out points.", style = MaterialTheme.typography.bodySmall)
+                    Text("Drag the purple edges; the undimmed area is the section to import.",
+                        style = MaterialTheme.typography.bodySmall)
                 }
                 if (item.kind != "image" && duration > 0L && player != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
