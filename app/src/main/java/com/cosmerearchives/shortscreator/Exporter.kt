@@ -36,7 +36,11 @@ object Exporter {
         val (outputWidth, outputHeight) = exportDimensions(ratio)
         val presentation = Presentation.createForWidthAndHeight(outputWidth, outputHeight, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)
         val main = clips.filter { it.track == 0 }
-        require(main.isNotEmpty()) { "Add main-track videos before exporting" }
+        require(main.isNotEmpty()) { "Add main media before exporting" }
+        if (main.all { it.kind == "audio" }) {
+            exportAudioEqualizer(context, clips, ratio, callback)
+            return
+        }
         require(main.all { it.kind == "video" && it.endMs > it.startMs }) {
             "Timeline export currently supports trimmed video clips on the main track only"
         }
@@ -140,6 +144,77 @@ object Exporter {
             )))
             .build()
         startExport(context, output, callback, outputWidth to outputHeight) { transformer -> transformer.start(composition, output.absolutePath) }
+    }
+
+    private fun exportAudioEqualizer(context: Context, clips: List<Clip>, ratio: String, callback: (String) -> Unit) {
+        val main = clips.filter { it.track == 0 }
+        require(main.all { it.endMs > it.startMs }) { "Invalid audio duration" }
+        require(clips.none { it.track == 1 }) { "Visual overlays on audio-only projects are not yet supported" }
+        callback("Preparing equalizer video…")
+        kotlin.concurrent.thread {
+            try {
+                val peaks = main.map { extractAudioPeaks(context, Uri.parse(it.uri)) }
+                val (width, height) = exportDimensions(ratio)
+                val background = File(context.cacheDir, "equalizer-background.png")
+                if (!background.exists()) {
+                    val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+                    bitmap.eraseColor(AndroidColor.rgb(32, 27, 47))
+                    background.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    bitmap.recycle()
+                }
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    try {
+                        val visualItems = main.mapIndexed { index, clip ->
+                            val levels = peaks[index]
+                            val overlay = object : BitmapOverlay() {
+                                override fun getBitmap(presentationTimeUs: Long): Bitmap {
+                                    val w = 480
+                                    val h = (480f * height / width).toInt()
+                                    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                                    val canvas = Canvas(bitmap)
+                                    val brush = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(163, 129, 225) }
+                                    val time = clip.startMs + presentationTimeUs / 1000L
+                                    val bin = ((time.toDouble() / clip.endMs.coerceAtLeast(1L)) * levels.size).toInt().coerceIn(0, (levels.size - 1).coerceAtLeast(0))
+                                    val level = levels.getOrNull(bin)?.coerceIn(0.08f, 1f) ?: 0.2f
+                                    for (i in 0 until 32) {
+                                        val phase = presentationTimeUs / 170000.0 + i * 0.7
+                                        val motion = kotlin.math.abs(kotlin.math.sin(phase) * kotlin.math.cos(phase * 0.45)).toFloat()
+                                        val barH = h * 0.65f * level * (0.2f + 0.8f * motion)
+                                        val x = (i + 0.5f) * w / 32
+                                        canvas.drawRoundRect(x - 5f, (h - barH) / 2, x + 5f,
+                                            (h + barH) / 2, 4f, 4f, brush)
+                                    }
+                                    return bitmap
+                                }
+                            }
+                            val image = MediaItem.Builder().setUri(Uri.fromFile(background))
+                                .setImageDurationMs(clip.endMs - clip.startMs).build()
+                            EditedMediaItem.Builder(image).setFrameRate(15)
+                                .setEffects(Effects(emptyList(), listOf(OverlayEffect(listOf(overlay)),
+                                    Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP))))
+                                .build()
+                        }
+                        val audioItems = main.map { clip ->
+                            val media = MediaItem.Builder().setUri(Uri.parse(clip.uri))
+                                .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                                    .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
+                            EditedMediaItem.Builder(media).build()
+                        }
+                        val sequences = listOf(EditedMediaItemSequence.withVideoFrom(visualItems),
+                            EditedMediaItemSequence.withAudioFrom(audioItems))
+                        val output = File(context.cacheDir, "equalizer-" + System.currentTimeMillis() + ".mp4")
+                        callback("Encoding equalizer video…")
+                        startExport(context, output, callback, width to height) { transformer ->
+                            transformer.start(Composition.Builder(sequences).build(), output.absolutePath)
+                        }
+                    } catch (e: Exception) { callback("Equalizer export failed: " + e.message) }
+                }
+            } catch (e: Exception) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    callback("Equalizer preparation failed: " + e.message)
+                }
+            }
+        }
     }
 
     fun export(context: Context, source: String, startMs: Long, endMs: Long, ratio: String, callback: (String) -> Unit) {
