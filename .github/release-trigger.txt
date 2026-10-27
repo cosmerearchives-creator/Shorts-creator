@@ -1,2 +1,2 @@
-Release request: v0.22.0-alpha
-Version code 23 - timeline media trim strips
+Release request: v0.23.0-alpha
+Version code 24 - drag image overlays
