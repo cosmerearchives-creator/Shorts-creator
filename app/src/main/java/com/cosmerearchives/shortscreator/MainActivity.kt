@@ -861,7 +861,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
     }
     var waveform by remember(item.uri) { mutableStateOf<List<Float>>(emptyList()) }
     LaunchedEffect(item.uri) {
-        if (item.kind == "audio") {
+        if (item.kind == "audio" && duration <= 5L * 60L * 1000L) {
             waveform = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 cachedAudioPeaks(context, Uri.parse(item.uri))
             }
@@ -953,7 +953,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                                 }
                             }
                         } else {
-                            Text(if (item.kind == "audio") "Waveform unavailable or loading…" else "Frames unavailable",
+                            Text(if (item.kind == "audio" && duration > 5L * 60L * 1000L) "Waveform disabled for long recordings" else if (item.kind == "audio") "Waveform unavailable or loading…" else "Frames unavailable",
                                 modifier = Modifier.align(Alignment.Center),
                                 style = MaterialTheme.typography.bodySmall)
                         }
@@ -1012,6 +1012,10 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                 if (item.kind != "image" && duration > 0L) {
                     HorizontalDivider()
                     Text("Search & Trim", fontWeight = FontWeight.SemiBold)
+                    if (duration > 5L * 60L * 1000L) {
+                        Text("Long recording: importing and manual trimming are available. Full speech scanning is limited to five minutes until chunked processing is added.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
                     Text(speechStatus, style = MaterialTheme.typography.bodySmall,
                         color = if (speechError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                     if (scanningSpeech) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -1019,7 +1023,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                         Text("No timestamped words recognized. Try a clearer spoken clip or scan again.",
                             color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
-                    OutlinedButton(enabled = !scanningSpeech, onClick = {
+                    OutlinedButton(enabled = !scanningSpeech && duration <= 5L * 60L * 1000L, onClick = {
                         scanningSpeech = true
                         speechError = false
                         speechScope.launch {
