@@ -1,2 +1,2 @@
 Release request: v0.37.0-alpha
-Version code 38 - bounded chunked speech scanning and resumable transcript sections
+Version code 38 - repair Kotlin tab literal in chunked transcript parsing
