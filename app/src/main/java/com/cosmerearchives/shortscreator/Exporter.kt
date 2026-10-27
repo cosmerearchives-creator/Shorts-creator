@@ -5,7 +5,7 @@ import android.graphics.BitmapFactory
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.StaticOverlaySettings
-import androidx.media3.effect.OverlaySettings
+import androidx.media3.common.OverlaySettings
 import android.graphics.Bitmap
 import androidx.media3.transformer.Effects
 import android.content.Context
