@@ -68,6 +68,9 @@ data class Project(val name: String, val ratio: String, val clips: List<Clip> = 
 
 class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("projects", MODE_PRIVATE) }
+    private val writeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var queuedWrite: Runnable? = null
+    private var latestSnapshot: List<Project>? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
@@ -680,6 +683,20 @@ class MainActivity : ComponentActivity() {
     } catch (_: Exception) { emptyList() }
 
     private fun saveProjects(projects: List<Project>) {
+        val snapshot = projects.toList()
+        latestSnapshot = snapshot
+        queuedWrite?.let(writeHandler::removeCallbacks)
+        queuedWrite = Runnable { writeProjects(snapshot) }
+        writeHandler.postDelayed(queuedWrite!!, 300L)
+    }
+
+    override fun onStop() {
+        queuedWrite?.let(writeHandler::removeCallbacks)
+        latestSnapshot?.let(::writeProjects)
+        super.onStop()
+    }
+
+    private fun writeProjects(projects: List<Project>) {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
