@@ -774,7 +774,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
     LaunchedEffect(item.uri) {
         if (item.kind == "audio") {
             waveform = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                extractAudioPeaks(context, Uri.parse(item.uri))
+                cachedAudioPeaks(context, Uri.parse(item.uri))
             }
         }
     }
@@ -930,6 +930,21 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
     )
 }
 
+private val waveformCache = object : android.util.LruCache<String, List<Float>>(32) {}
+private val waveformLocks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+
+private fun cachedAudioPeaks(context: android.content.Context, uri: Uri): List<Float> {
+    val key = uri.toString()
+    synchronized(waveformCache) { waveformCache.get(key)?.let { return it } }
+    val lock = waveformLocks.getOrPut(key) { Any() }
+    synchronized(lock) {
+        synchronized(waveformCache) { waveformCache.get(key)?.let { return it } }
+        val result = extractAudioPeaks(context, uri)
+        if (result.isNotEmpty()) synchronized(waveformCache) { waveformCache.put(key, result) }
+        return result
+    }
+}
+
 private fun extractAudioPeaks(context: android.content.Context, uri: Uri): List<Float> {
     val extractor = MediaExtractor()
     try {
@@ -951,12 +966,16 @@ private fun extractAudioPeaks(context: android.content.Context, uri: Uri): List<
             var inputDone = false
             var outputDone = false
             var iterations = 0
+            // Limit decoding of very long recordings to avoid prolonged CPU use.
+            val analysisLimitUs = 180L * 1000000L
             while (!outputDone && iterations++ < 25000) {
+                if (Thread.currentThread().isInterrupted) break
                 if (!inputDone) {
                     val inputIndex = codec.dequeueInputBuffer(10000)
                     if (inputIndex >= 0) {
                         val buffer = codec.getInputBuffer(inputIndex)!!
                         buffer.clear()
+                        if (extractor.sampleTime > analysisLimitUs) break
                         val size = extractor.readSampleData(buffer, 0)
                         if (size < 0) {
                             codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
@@ -1022,7 +1041,7 @@ private fun TimelineMediaStrip(
             }
         } else if (kind == "audio") {
             peaks = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                extractAudioPeaks(context, Uri.parse(uri))
+                cachedAudioPeaks(context, Uri.parse(uri))
             }
         }
     }
