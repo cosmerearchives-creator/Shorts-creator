@@ -1,2 +1,2 @@
-Release request: v0.6.0-alpha
-Main-track timeline export, versionCode 7.
+Release request: v0.7.0-alpha
+Version code 8. Main timeline plus separate audio mixes in export.
