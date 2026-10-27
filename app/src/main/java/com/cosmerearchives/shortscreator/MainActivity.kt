@@ -939,8 +939,29 @@ private fun cachedAudioPeaks(context: android.content.Context, uri: Uri): List<F
     val lock = waveformLocks.getOrPut(key) { Any() }
     synchronized(lock) {
         synchronized(waveformCache) { waveformCache.get(key)?.let { return it } }
+        val filename = "wave_" + java.security.MessageDigest.getInstance("SHA-256")
+            .digest(key.toByteArray()).joinToString("") { "%02x".format(it) } + ".bin"
+        val file = java.io.File(context.cacheDir, filename)
+        val disk = try {
+            if (file.length() in 8..4096) java.io.DataInputStream(file.inputStream()).use { stream ->
+                val count = stream.readInt()
+                if (count in 1..512) List(count) { stream.readFloat() } else emptyList()
+            } else emptyList()
+        } catch (_: Exception) { emptyList<Float>() }
+        if (disk.isNotEmpty()) {
+            synchronized(waveformCache) { waveformCache.put(key, disk) }
+            return disk
+        }
         val result = extractAudioPeaks(context, uri)
-        if (result.isNotEmpty()) synchronized(waveformCache) { waveformCache.put(key, result) }
+        if (result.isNotEmpty()) {
+            synchronized(waveformCache) { waveformCache.put(key, result) }
+            try {
+                java.io.DataOutputStream(file.outputStream()).use { stream ->
+                    stream.writeInt(result.size)
+                    result.forEach { stream.writeFloat(it) }
+                }
+            } catch (_: Exception) { }
+        }
         return result
     }
 }
