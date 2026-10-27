@@ -54,10 +54,10 @@ object SpeechSearch {
  */
 class TranscriptCache(private val context: Context) {
     private val directory: File
-        get() = File(context.cacheDir, "speech-transcripts").also { it.mkdirs() }
+        get() = File(context.filesDir, "speech-transcripts").also { it.mkdirs() }
 
     fun sourceKey(uri: Uri, modelId: String): String {
-        val meta = context.contentResolver.query(uri, arrayOf(
+        val meta = try { context.contentResolver.query(uri, arrayOf(
             android.provider.OpenableColumns.SIZE,
             android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED
         ), null, null, null)?.use { cursor ->
@@ -66,13 +66,21 @@ class TranscriptCache(private val context: Context) {
             val size = if (sizeAt >= 0 && cursor.moveToFirst()) cursor.getLong(sizeAt) else -1
             val modified = if (modifiedAt >= 0 && cursor.position >= 0 && !cursor.isNull(modifiedAt)) cursor.getLong(modifiedAt) else -1
             "$size:$modified"
-        } ?: "unknown"
+        } ?: "unknown" } catch (_: Exception) { "unknown" }
         val bytes = MessageDigest.getInstance("SHA-256")
             .digest("$uri|$meta|$modelId|v1".toByteArray(Charsets.UTF_8))
         return bytes.joinToString("") { "%02x".format(it) }
     }
 
     fun load(key: String): List<SpokenWord>? = try {
+        val stable = File(directory, "$key.json")
+        if (!stable.exists()) {
+            val legacy = File(context.cacheDir, "speech-transcripts/$key.json")
+            if (legacy.isFile) {
+                legacy.copyTo(stable, overwrite = false)
+                legacy.delete()
+            }
+        }
         val file = File(directory, "$key.json")
         if (!file.isFile) null else {
             val array = JSONArray(file.readText())
