@@ -1,2 +1,2 @@
-Release request: v0.54.0-alpha
-Build 55 - audible TTS test, linked status and synchronized editor speech
+Release request: v0.55.0-alpha
+Build 56 - speech volume pitch speed controls
