@@ -1,2 +1,2 @@
-Release request: v0.63.0-alpha
-Build 64 - Spanreed Vision project dashboard visual redesign
+Release request: v0.64.0-alpha
+Build 65 - dashboard refresh and existing Tools tiles
