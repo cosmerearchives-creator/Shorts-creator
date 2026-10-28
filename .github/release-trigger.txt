@@ -1,2 +1,2 @@
-Release request: v0.52.0-alpha
-Build 53 - timeline zoom buttons
+Release request: v0.53.0-alpha
+Build 54 - linked text-to-speech with measured overlay duration
