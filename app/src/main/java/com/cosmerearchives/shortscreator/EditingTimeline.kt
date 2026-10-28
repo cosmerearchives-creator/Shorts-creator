@@ -52,7 +52,8 @@ fun EditingTimeline(
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
-    val names = remember(clips) { clips.map { clip ->
+    val nameKeys = clips.map { it.uri to (if (it.kind == "text") it.caption else "") }
+    val names = remember(nameKeys) { clips.map { clip ->
         if (clip.kind == "text") clip.caption.ifBlank { "Text overlay" }
         else try {
             val uri = Uri.parse(clip.uri)
@@ -65,7 +66,7 @@ fun EditingTimeline(
     var zoom by rememberSaveable { mutableFloatStateOf(1f) }
     val pxPerMs = with(density) { (PX_PER_SECOND_DP * zoom).dp.toPx() } / 1000f
     val leftPx = with(density) { START_DP.dp.toPx() }
-    val durations = clips.map { max(1000L, it.endMs - it.startMs) }
+    val durations = remember(clips) { clips.map { max(1000L, it.endMs - it.startMs) } }
     var running = 0L
     val positions = clips.mapIndexed { index, clip ->
         if (clip.track == 0) {
@@ -86,7 +87,7 @@ fun EditingTimeline(
     val liveMove = rememberUpdatedState(onMove)
     val liveTrim = rememberUpdatedState(onTrim)
     val liveReorder = rememberUpdatedState(onReorder)
-    val lanes = listOf(1 to "Overlay", 0 to "Main", 2 to "Audio")
+    val lanes = remember { listOf(1 to "Overlay", 0 to "Main", 2 to "Audio") }
     Column {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -100,12 +101,15 @@ fun EditingTimeline(
         Text("Playhead: %.1fs".format(playheadMs / 1000.0), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(6.dp))
         Column(Modifier.fillMaxWidth().horizontalScroll(scroll)) {
-            Canvas(Modifier.width(widthDp.dp).height(32.dp).pointerInput(total) {
+            Canvas(Modifier.width(widthDp.dp).height(32.dp).pointerInput(total, zoom) {
                 detectTapGestures { tap -> onScrub(((tap.x - leftPx) / pxPerMs).toLong().coerceIn(0, total)) }
             }) {
                 drawRect(timelineDark)
                 val paint = Paint().apply { color = android.graphics.Color.WHITE; textSize = 11.sp.toPx(); isAntiAlias = true }
-                for (second in 0..(total / 1000L).toInt()) {
+                val bounds = drawContext.canvas.nativeCanvas.clipBounds
+                val first = (((bounds.left - leftPx) / (pxPerMs * 1000f)).toInt() - 1).coerceAtLeast(0)
+                val last = (((bounds.right - leftPx) / (pxPerMs * 1000f)).toInt() + 1).coerceAtMost((total / 1000L).toInt())
+                for (second in first..last) {
                     val x = leftPx + second * pxPerMs * 1000f
                     if (second % 5 == 0) {
                         drawLine(Color(0xFFE6DEEE), Offset(x, 12.dp.toPx()), Offset(x, size.height), 1.dp.toPx())
@@ -118,7 +122,7 @@ fun EditingTimeline(
                 drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
             }
             lanes.forEach { (lane, label) ->
-                Canvas(Modifier.width(widthDp.dp).height(61.dp).pointerInput(lane) {
+                Canvas(Modifier.width(widthDp.dp).height(61.dp).pointerInput(lane, zoom) {
                     awaitEachGesture {
                         val clips = liveClips.value
                         val positions = livePositions.value
@@ -138,6 +142,7 @@ fun EditingTimeline(
                             else -> 3
                         }
                         var totalDx = 0f
+                        var previousDx = 0f
                         var currentStart = initialClip?.startMs ?: 0L
                         var currentEnd = initialClip?.endMs ?: 0L
                         var currentPosition = start
@@ -151,7 +156,9 @@ fun EditingTimeline(
                             if (moving != null) liveSelect.value(moving)
                             if (moving != null && initialClip != null) {
                                 fun update(dx: Float) {
-                                    val delta = (dx / pxPerMs).toLong()
+                                    val delta = ((dx - previousDx) / pxPerMs).toLong()
+                                    previousDx = dx
+                                    if (delta == 0L) return
                                     when (action) {
                                         1 -> {
                                             currentStart = (currentStart + delta).coerceIn(0L, (currentEnd - 100L).coerceAtLeast(0L))
@@ -188,7 +195,11 @@ fun EditingTimeline(
                     val paint = Paint().apply { isAntiAlias = true; textSize = 12.sp.toPx(); color = android.graphics.Color.WHITE }
                     drawContext.canvas.nativeCanvas.drawText(label, 7.dp.toPx(), 32.dp.toPx(), paint)
                     drawLine(Color(0xFF524B5D), Offset(leftPx, size.height - 1f), Offset(size.width, size.height - 1f))
-                    clips.indices.filter { clips[it].track == lane }.forEach { i ->
+                    val visible = drawContext.canvas.nativeCanvas.clipBounds
+                    clips.indices.filter { clips[it].track == lane &&
+                        leftPx + (positions[it] + durations[it]) * pxPerMs >= visible.left &&
+                        leftPx + positions[it] * pxPerMs <= visible.right
+                    }.forEach { i ->
                         val x = leftPx + positions[i] * pxPerMs
                         val w = max(12.dp.toPx(), durations[i] * pxPerMs - 2.dp.toPx())
                         val tint = if (clips[i].kind == "audio") audioColor else if (lane == 0) videoColor else overlayColor
