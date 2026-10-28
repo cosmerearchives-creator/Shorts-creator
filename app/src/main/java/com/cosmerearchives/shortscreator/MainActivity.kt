@@ -865,7 +865,7 @@ class MainActivity : ComponentActivity() {
                                                 Text(Uri.parse(item.uri).lastPathSegment ?: "Media file", maxLines = 2)
                                                 Text("Selection: ${"%.1f".format(item.startMs / 1000.0)}s – ${"%.1f".format(item.endMs / 1000.0)}s",
                                                     style = MaterialTheme.typography.bodySmall)
-                                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                     Button(onClick = {
                                                         if (selected in projects.indices) {
                                                             val updated = projects.toMutableList()
@@ -878,12 +878,12 @@ class MainActivity : ComponentActivity() {
                                                             showLibrary = false
                                                         }
                                                     }, enabled = selected in projects.indices && !(item.kind == "image" && selectedTrack == 0)) {
-                                                        Text("Add to timeline")
+                                                        Icon(Icons.Default.Add, "Add to timeline")
                                                     }
                                                     TextButton(onClick = {
                                                         pendingImport = PendingImport(item.uri, item.kind, selectedTrack,
                                                             if (item.kind == "image") 5000L else getDuration(Uri.parse(item.uri)))
-                                                    }) { Text("Trim / Search") }
+                                                    }) { Icon(Icons.Default.ContentCut, "Trim or search") }
                                                     TextButton(onClick = {
                                                         if (sharedLibrary || currentProjectId == null) {
                                                             libraryItems = libraryItems.filterIndexed { i, _ -> i != index }
@@ -892,7 +892,7 @@ class MainActivity : ComponentActivity() {
                                                             projectLibraryItems = projectLibraryItems.filterIndexed { i, _ -> i != index }
                                                             writeProjectLibrary(this@MainActivity, currentProjectId, projectLibraryItems)
                                                         }
-                                                    }) { Text("Remove") }
+                                                    }) { Icon(Icons.Default.DeleteOutline, "Remove from library") }
                                                 }
                                                 if (!sharedLibrary && currentProjectId != null) {
                                                     OutlinedButton(onClick = {
@@ -901,7 +901,7 @@ class MainActivity : ComponentActivity() {
                                                             writeLibrary(this@MainActivity, libraryItems)
                                                         }
                                                         libraryStatus = "Saved to shared Media Library."
-                                                    }) { Text("Save to Media Library") }
+                                                    }) { Icon(Icons.Default.LibraryAdd, "Save to shared Media Library") }
                                                 }
                                                 val local = item.uri.startsWith("file://") &&
                                                     Uri.parse(item.uri).path?.startsWith(filesDir.absolutePath + "/media-archive/") == true
@@ -939,10 +939,10 @@ class MainActivity : ComponentActivity() {
                                                                 libraryStatus = "Offline copy failed: ${e.message}"
                                                             } finally { libraryBusy = false }
                                                         }
-                                                    }) { Text("Keep offline copy") }
+                                                    }) { Icon(Icons.Default.Download, "Keep offline copy") }
                                                 } else {
                                                     Text("Stored offline", style = MaterialTheme.typography.bodySmall)
-                                                    OutlinedButton(onClick = { confirmMediaDeletion = item }) { Text("Delete offline copy") }
+                                                    OutlinedButton(onClick = { confirmMediaDeletion = item }) { Icon(Icons.Default.DeleteForever, "Delete offline copy") }
                                                 }
                                                 TextButton(onClick = {
                                                     libraryScope.launch {
@@ -953,7 +953,7 @@ class MainActivity : ComponentActivity() {
                                                         libraryStatus = "Deleted $count stored speech transcript section(s). Media is unchanged."
                                                         libraryResults = emptyMap()
                                                     }
-                                                }) { Text("Delete transcript only") }
+                                                }) { Icon(Icons.Default.TextSnippet, "Delete transcript only") }
                                             }
                                         }
                                         }
