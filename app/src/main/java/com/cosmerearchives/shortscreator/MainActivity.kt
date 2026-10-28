@@ -397,7 +397,14 @@ class MainActivity : ComponentActivity() {
                             }
                             var previewSize by remember { mutableStateOf(IntSize.Zero) }
                             val frameContext = LocalContext.current
-                            Box(Modifier.fillMaxWidth().height(240.dp).background(dark, RoundedCornerShape(16.dp))
+                            val previewRatio = when (project.ratio) {
+                                "9:16" -> 9f / 16f
+                                "1:1" -> 1f
+                                "4:5" -> 4f / 5f
+                                "16:9" -> 16f / 9f
+                                else -> 9f / 16f
+                            }
+                            Box(Modifier.fillMaxWidth().aspectRatio(previewRatio).background(dark, RoundedCornerShape(16.dp))
                                 .onSizeChanged { previewSize = it }) {
                                 if (previewClip != null && previewClip.kind == "video") {
                                     AndroidView(
