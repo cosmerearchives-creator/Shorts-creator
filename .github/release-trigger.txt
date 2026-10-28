@@ -1,2 +1,2 @@
-Release retry: v0.59.0-alpha
-Build 60 - fix timeline viewport compile brace
+Release request: v0.60.0-alpha
+Build 61 - display installed version on projects menu
