@@ -1,2 +1,2 @@
 Release request: v0.44.0-alpha
-Build 45 - timeline direct drag gesture fix
+Build 45 - unified timeline touch gestures with pointer imports
