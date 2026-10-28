@@ -1,2 +1,2 @@
-Release request: v0.55.0-alpha
-Build 56 - speech volume pitch speed controls
+Release request: v0.56.0-alpha
+Build 57 - preview without main media, synced timeline scrubbing
