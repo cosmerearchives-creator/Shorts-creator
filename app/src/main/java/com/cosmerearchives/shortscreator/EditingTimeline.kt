@@ -2,7 +2,7 @@ package com.cosmerearchives.shortscreator
 
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -34,7 +34,9 @@ fun EditingTimeline(
     playheadMs: Long,
     onSelect: (Int) -> Unit,
     onScrub: (Long) -> Unit,
-    onMove: (Int, Long) -> Unit
+    onMove: (Int, Long) -> Unit,
+    onTrim: (Int, Long, Long) -> Unit,
+    onReorder: (Int, Int) -> Unit
 ) {
     val density = LocalDensity.current
     val pxPerMs = with(density) { PX_PER_SECOND_DP.dp.toPx() } / 1000f
@@ -82,10 +84,12 @@ fun EditingTimeline(
                         val chosen = clips.indices.lastOrNull { i -> clips[i].track == lane && time in positions[i]..(positions[i] + durations[i]) }
                         if (chosen != null) onSelect(chosen) else onScrub(time.coerceAtMost(total))
                     }
-                }.pointerInput(clips, positions, durations) {
+                }.pointerInput(clips, positions, durations, selectedIndex) {
                     var moving = -1
-                    var draggingTime = 0L
-                    detectDragGesturesAfterLongPress(
+                    var action = 0 // 1=start trim, 2=end trim, 3=move
+                    var deltaTime = 0L
+                    var startPosition = 0L
+                    detectDragGestures(
                         onDragStart = { pos ->
                             val time = ((pos.x - leftPx) / pxPerMs).toLong().coerceAtLeast(0L)
                             moving = clips.indices.lastOrNull { i ->
@@ -93,20 +97,54 @@ fun EditingTimeline(
                             } ?: -1
                             if (moving >= 0) {
                                 onSelect(moving)
-                                draggingTime = positions[moving]
+                                val offset = time - positions[moving]
+                                val edgeMs = (12.dp.toPx() / pxPerMs).toLong()
+                                action = when {
+                                    offset <= edgeMs -> 1
+                                    durations[moving] - offset <= edgeMs -> 2
+                                    else -> 3
+                                }
+                                startPosition = positions[moving]
+                                deltaTime = 0L
                             }
                         },
                         onDrag = { change, amount ->
                             change.consume()
-                            if (moving >= 0 && clips[moving].track != 0) {
-                                draggingTime = (draggingTime + (amount.x / pxPerMs).toLong()).coerceIn(0L, 60000L)
-                                onMove(moving, draggingTime)
+                            if (moving >= 0) {
+                                deltaTime += (amount.x / pxPerMs).toLong()
+                                val clip = clips[moving]
+                                when (action) {
+                                    1 -> {
+                                        val newStart = (clip.startMs + (amount.x / pxPerMs).toLong())
+                                            .coerceIn(0L, (clip.endMs - 100L).coerceAtLeast(0L))
+                                        onTrim(moving, newStart, clip.endMs)
+                                    }
+                                    2 -> {
+                                        val newEnd = (clip.endMs + (amount.x / pxPerMs).toLong())
+                                            .coerceAtLeast(clip.startMs + 100L)
+                                        onTrim(moving, clip.startMs, newEnd)
+                                    }
+                                    3 -> if (clip.track != 0) {
+                                        val newPosition = (startPosition + deltaTime).coerceAtLeast(0L)
+                                        onMove(moving, newPosition)
+                                    }
+                                }
                             }
                         },
-                        onDragEnd = { moving = -1 },
+                        onDragEnd = {
+                            if (moving >= 0 && action == 3 && clips[moving].track == 0) {
+                                val mainOrder = clips.indices.filter { clips[it].track == 0 }
+                                val targetTime = positions[moving] + deltaTime + durations[moving] / 2L
+                                val destination = mainOrder.minByOrNull {
+                                    kotlin.math.abs((positions[it] + durations[it] / 2L) - targetTime)
+                                }
+                                if (destination != null && destination != moving) onReorder(moving, destination)
+                            }
+                            moving = -1
+                        },
                         onDragCancel = { moving = -1 }
                     )
-                }) {
+ {
                     drawRect(timelineDark)
                     val paint = Paint().apply { isAntiAlias = true; textSize = 12.sp.toPx(); color = android.graphics.Color.WHITE }
                     drawContext.canvas.nativeCanvas.drawText(label, 7.dp.toPx(), 32.dp.toPx(), paint)
@@ -117,6 +155,10 @@ fun EditingTimeline(
                         val tint = if (clips[i].kind == "audio") audioColor else if (lane == 0) videoColor else overlayColor
                         drawRect(tint, Offset(x, 8.dp.toPx()), androidx.compose.ui.geometry.Size(w, 44.dp.toPx()))
                         if (i == selectedIndex) {
+                            drawRect(Color.White.copy(alpha = 0.8f), Offset(x, 8.dp.toPx()),
+                                androidx.compose.ui.geometry.Size(4.dp.toPx(), 44.dp.toPx()))
+                            drawRect(Color.White.copy(alpha = 0.8f), Offset(x + w - 4.dp.toPx(), 8.dp.toPx()),
+                                androidx.compose.ui.geometry.Size(4.dp.toPx(), 44.dp.toPx()))
                             drawRect(Color.White, Offset(x, 8.dp.toPx()), androidx.compose.ui.geometry.Size(w, 44.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
                         }
                         drawContext.canvas.nativeCanvas.drawText("Clip ${i+1}", x + 5.dp.toPx(), 34.dp.toPx(), paint)
@@ -126,6 +168,6 @@ fun EditingTimeline(
                 }
             }
         }
-        Text("V1 clips follow each other. Overlays use independent time positions.", style = MaterialTheme.typography.bodySmall)
+        Text("Drag clip edges to trim. Drag the center to move overlays or reorder main clips.", style = MaterialTheme.typography.bodySmall)
     }
 }
