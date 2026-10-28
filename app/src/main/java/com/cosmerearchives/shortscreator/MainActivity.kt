@@ -853,6 +853,7 @@ class MainActivity : ComponentActivity() {
                                         if (librarySpeechQuery.isBlank() || matches.isNotEmpty()) {
                                         ElevatedCard(Modifier.fillMaxWidth()) {
                                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                LibraryMediaPreview(item, Modifier.fillMaxWidth())
                                                 Text(item.kind.uppercase(), style = MaterialTheme.typography.labelSmall)
                                                 if (matches.isNotEmpty()) {
                                                     Text("${matches.size} matching occurrence(s)", style = MaterialTheme.typography.bodySmall)
@@ -1478,6 +1479,60 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                         Text("Save to library")
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryMediaPreview(item: LibraryMedia, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val uri = remember(item.uri) { Uri.parse(item.uri) }
+    if (item.kind == "audio") {
+        var peaks by remember(item.uri) { mutableStateOf<List<Float>>(emptyList()) }
+        LaunchedEffect(item.uri) {
+            peaks = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try { cachedAudioPeaks(context, uri) } catch (_: Exception) { emptyList() }
+            }
+        }
+        Canvas(modifier.height(48.dp).background(dark, RoundedCornerShape(8.dp))) {
+            val values = peaks.ifEmpty { List(48) { 0.14f } }
+            val width = size.width / values.size
+            values.forEachIndexed { i, peak ->
+                val strength = peak.coerceIn(0.07f, 1f)
+                val barHeight = (size.height * strength * 0.86f).coerceAtLeast(3.dp.toPx())
+                drawLine(purple, Offset((i + 0.5f) * width, (size.height - barHeight) / 2f),
+                    Offset((i + 0.5f) * width, (size.height + barHeight) / 2f),
+                    strokeWidth = (width * 0.56f).coerceAtLeast(2.dp.toPx()),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
+    } else {
+        var thumbnail by remember(item.uri) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+        LaunchedEffect(item.uri) {
+            thumbnail = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    if (item.kind == "image") previewImageCache.get(context, uri)
+                    else {
+                        val retriever = MediaMetadataRetriever()
+                        try {
+                            retriever.setDataSource(context, uri)
+                            retriever.getScaledFrameAtTime(
+                                item.startMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 270
+                            )?.asImageBitmap()
+                        } finally { retriever.release() }
+                    }
+                } catch (_: Exception) { null }
+            }
+        }
+        Box(modifier.height(140.dp).background(dark, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center) {
+            if (thumbnail != null) {
+                Image(thumbnail!!, if (item.kind == "video") "Video thumbnail" else "Image thumbnail",
+                    Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+            } else {
+                Icon(if (item.kind == "video") Icons.Default.Movie else Icons.Default.Image,
+                    "Media preview unavailable", tint = Color.White)
             }
         }
     }
