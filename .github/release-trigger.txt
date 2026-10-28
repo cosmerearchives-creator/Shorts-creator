@@ -1,2 +1,2 @@
-Release request: v0.49.0-alpha
-Build 50 - clean editor and main-menu development notices
+Release request: v0.50.0-alpha
+Build 51 - readable names in timeline clips
