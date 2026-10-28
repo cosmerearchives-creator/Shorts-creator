@@ -456,20 +456,17 @@ class MainActivity : ComponentActivity() {
                                 Text("${"%.1f".format(java.util.Locale.US, playheadMs / 1000.0)}s",
                                     style = MaterialTheme.typography.bodySmall)
                             }
-                            Text("Preview shows overlays at the playhead. Drag captions, images and PiP video to reposition; select PiP to resize with its slider.",
-                                style = MaterialTheme.typography.bodySmall)
-                            Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Text("Media library") }
-                                OutlinedButton(onClick = { selectedTrack = 1; sharedLibrary = false; showLibrary = true }) { Text("Add overlay") }
-                                OutlinedButton(onClick = {
+                                IconButton(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.VideoLibrary, "Media library") }
+                                IconButton(onClick = { selectedTrack = 1; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.Layers, "Add overlay") }
+                                IconButton(onClick = {
                                     val updated = projects.toMutableList()
                                     val cs = project.clips + Clip("", "text", 1, 0L, 5000L, playheadMs, caption = "New title")
                                     updated[selected] = project.copy(clips = cs)
                                     projects = updated
                                     activeClip = cs.lastIndex
                                     saveProjects(updated)
-                                }) { Text("Add text") }
+                                }) { Icon(Icons.Default.TextFields, "Add text") }
                             }
                             if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs) {
                                 val duration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
@@ -1725,7 +1722,7 @@ private fun TimelineMediaStrip(
                 })
         }
     }
-    Text("Drag purple edges to trim this timeline clip.", style = MaterialTheme.typography.bodySmall)
+    
 }
 
 private val previewImageCache = PreviewImageCache()
