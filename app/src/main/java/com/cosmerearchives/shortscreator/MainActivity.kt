@@ -228,6 +228,9 @@ class MainActivity : ComponentActivity() {
                                     Icon(Icons.Default.Error, "Development notes", tint = Color(0xFFC03936))
                                 }
                             }
+                            Text("Version ${BuildConfig.VERSION_NAME} · Build ${BuildConfig.VERSION_CODE}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = { newDialog = true }) { Icon(Icons.Default.Add, null); Text(" New project") }
