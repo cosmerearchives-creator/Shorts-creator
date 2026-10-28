@@ -1,6 +1,9 @@
 package com.cosmerearchives.shortscreator
 
 import android.graphics.Paint
+import android.provider.OpenableColumns
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -44,6 +47,17 @@ fun EditingTimeline(
     onReorder: (Int, Int) -> Unit
 ) {
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val names = remember(clips) { clips.map { clip ->
+        if (clip.kind == "text") clip.caption.ifBlank { "Text overlay" }
+        else try {
+            val uri = Uri.parse(clip.uri)
+            val display = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+            display?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "Untitled media"
+        } catch (_: Exception) { Uri.parse(clip.uri).lastPathSegment?.substringAfterLast('/') ?: "Untitled media" }
+    } }
     val pxPerMs = with(density) { PX_PER_SECOND_DP.dp.toPx() } / 1000f
     val leftPx = with(density) { START_DP.dp.toPx() }
     val durations = clips.map { max(1000L, it.endMs - it.startMs) }
@@ -173,7 +187,8 @@ fun EditingTimeline(
                                 androidx.compose.ui.geometry.Size(4.dp.toPx(), 44.dp.toPx()))
                             drawRect(Color.White, Offset(x, 8.dp.toPx()), androidx.compose.ui.geometry.Size(w, 44.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
                         }
-                        drawContext.canvas.nativeCanvas.drawText("Clip ${i+1}", x + 5.dp.toPx(), 34.dp.toPx(), paint)
+                        val clipText = paint.let { android.text.TextUtils.ellipsize(names[i], android.text.TextPaint(it), (w - 10.dp.toPx()).coerceAtLeast(0f), android.text.TextUtils.TruncateAt.END).toString() }
+                        drawContext.canvas.nativeCanvas.drawText(clipText, x + 5.dp.toPx(), 34.dp.toPx(), paint)
                     }
                     val playX = leftPx + playheadMs * pxPerMs
                     drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
