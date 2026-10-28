@@ -698,8 +698,37 @@ class MainActivity : ComponentActivity() {
                                         } finally { speechGenerating = false }
                                     }
                                 }) { Text(if (speechGenerating) "Generating…" else "Generate text-to-speech") }
-                                if (currentClip.ttsUri.isNotBlank()) Text("Speech linked to this overlay", style = MaterialTheme.typography.bodySmall)
                                 if (speechGenerationStatus.isNotBlank()) Text(speechGenerationStatus, style = MaterialTheme.typography.bodySmall)
+                                val speechAttached = currentClip.ttsUri.isNotBlank()
+                                val speechPreviewPlayer = remember(currentClip.ttsUri) {
+                                    currentClip.ttsUri.takeIf { it.isNotBlank() }?.let { source ->
+                                        ExoPlayer.Builder(this@MainActivity).build().apply {
+                                            setMediaItem(MediaItem.fromUri(Uri.parse(source)))
+                                            prepare()
+                                        }
+                                    }
+                                }
+                                DisposableEffect(speechPreviewPlayer) {
+                                    onDispose { speechPreviewPlayer?.release() }
+                                }
+                                Text(
+                                    if (speechAttached) "● Speech linked to this text · ${(currentClip.endMs - currentClip.startMs) / 1000.0}s"
+                                    else "○ No speech linked to this text",
+                                    color = if (speechAttached) Color(0xFF347A58) else MaterialTheme.colorScheme.onSurface,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                if (speechAttached) {
+                                    OutlinedButton(onClick = {
+                                        if (speechPreviewPlayer?.isPlaying == true) speechPreviewPlayer.pause()
+                                        else {
+                                            speechPreviewPlayer?.seekTo(0L)
+                                            speechPreviewPlayer?.play()
+                                        }
+                                    }) {
+                                        Icon(Icons.Default.VolumeUp, "Preview generated speech")
+                                        Text(" Listen to speech")
+                                    }
+                                }
                                 Text("Font size")
                                 Slider(value = currentClip.textSize.coerceIn(24f, 110f), valueRange = 24f..110f,
                                     onValueChange = { v ->
