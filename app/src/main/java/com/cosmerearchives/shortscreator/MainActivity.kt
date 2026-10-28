@@ -349,7 +349,14 @@ class MainActivity : ComponentActivity() {
                             }
                         } else {
                             val project = projects[selected]
-                            Text(project.name + " · " + project.ratio, style = MaterialTheme.typography.titleMedium)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(project.name, style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                Surface(color = Color(0xFFE9E1F2), shape = RoundedCornerShape(12.dp)) {
+                                    Text(project.ratio, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        color = purple, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
                             Spacer(Modifier.height(8.dp))
                             var activeClip by remember(selected) { mutableIntStateOf(project.clips.indexOfFirst { it.track == 0 }.coerceAtLeast(0)) }
                             var playheadMs by remember(selected) { mutableLongStateOf(0L) }
@@ -633,6 +640,59 @@ class MainActivity : ComponentActivity() {
                                     saveProjects(updated)
                                 }) { Icon(Icons.Default.TextFields, "Add text") }
                             }
+                            Spacer(Modifier.height(10.dp))
+                            HorizontalDivider(color = Color(0xFFE7DFF0))
+                            Spacer(Modifier.height(8.dp))
+                            EditingTimeline(
+                                clips = project.clips,
+                                selectedIndex = activeClip,
+                                playheadMs = playheadMs,
+                                onSelect = { i -> activeClip = i },
+                                onScrub = { time ->
+                                    previewPlaying = false
+                                    playheadMs = time.coerceIn(0L, timelineEndMs)
+                                },
+                                onMove = { index, position ->
+                                    val cs = projects[selected].clips.toMutableList()
+                                    if (index in cs.indices && cs[index].track != 0) {
+                                        cs[index] = cs[index].copy(positionMs = position)
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = projects[selected].copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }
+                                },
+                                onTrim = { index, start, end ->
+                                    val clip = projects[selected].clips.getOrNull(index)
+                                    if (clip != null && clip.kind != "text") {
+                                        val maxDuration = getDuration(Uri.parse(clip.uri)).coerceAtLeast(clip.endMs)
+                                        val cs = projects[selected].clips.toMutableList()
+                                        cs[index] = clip.copy(startMs = start.coerceAtLeast(0L),
+                                            endMs = end.coerceAtMost(maxDuration).coerceAtLeast(start + 100L))
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = projects[selected].copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }
+                                },
+                                onReorder = { from, to ->
+                                    val cs = projects[selected].clips.toMutableList()
+                                    if (from in cs.indices && to in cs.indices && cs[from].track == 0 && cs[to].track == 0) {
+                                        val moved = cs.removeAt(from)
+                                        cs.add(to, moved)
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = projects[selected].copy(clips = cs)
+                                        projects = updated
+                                        activeClip = to
+                                        playheadMs = 0L
+                                        saveProjects(updated)
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            Text("Selected clip", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(8.dp))
                             if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs) {
                                 val duration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
                                 if (duration > 0) {
@@ -691,52 +751,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) { Text("Export complete timeline") }
                             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
-                            EditingTimeline(
-                                clips = project.clips,
-                                selectedIndex = activeClip,
-                                playheadMs = playheadMs,
-                                onSelect = { i -> activeClip = i },
-                                onScrub = { time ->
-                                    previewPlaying = false
-                                    playheadMs = time.coerceIn(0L, timelineEndMs)
-                                },
-                                onMove = { index, position ->
-                                    val cs = projects[selected].clips.toMutableList()
-                                    if (index in cs.indices && cs[index].track != 0) {
-                                        cs[index] = cs[index].copy(positionMs = position)
-                                        val updated = projects.toMutableList()
-                                        updated[selected] = projects[selected].copy(clips = cs)
-                                        projects = updated
-                                        saveProjects(updated)
-                                    }
-                                },
-                                onTrim = { index, start, end ->
-                                    val clip = projects[selected].clips.getOrNull(index)
-                                    if (clip != null && clip.kind != "text") {
-                                        val maxDuration = getDuration(Uri.parse(clip.uri)).coerceAtLeast(clip.endMs)
-                                        val cs = projects[selected].clips.toMutableList()
-                                        cs[index] = clip.copy(startMs = start.coerceAtLeast(0L),
-                                            endMs = end.coerceAtMost(maxDuration).coerceAtLeast(start + 100L))
-                                        val updated = projects.toMutableList()
-                                        updated[selected] = projects[selected].copy(clips = cs)
-                                        projects = updated
-                                        saveProjects(updated)
-                                    }
-                                },
-                                onReorder = { from, to ->
-                                    val cs = projects[selected].clips.toMutableList()
-                                    if (from in cs.indices && to in cs.indices && cs[from].track == 0 && cs[to].track == 0) {
-                                        val moved = cs.removeAt(from)
-                                        cs.add(to, moved)
-                                        val updated = projects.toMutableList()
-                                        updated[selected] = projects[selected].copy(clips = cs)
-                                        projects = updated
-                                        activeClip = to
-                                        playheadMs = 0L
-                                        saveProjects(updated)
-                                    }
-                                }
-                            )
                             if (currentClip != null && (currentClip.kind == "video" || currentClip.kind == "audio") && currentClip.endMs > currentClip.startMs) {
                                 val sourceDuration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
                                 if (sourceDuration > 100L) {
