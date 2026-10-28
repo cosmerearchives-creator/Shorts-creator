@@ -284,6 +284,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             val previewClip = previewIndex?.let { project.clips[it] }
+                            val timelineEndMs = maxOf(
+                                project.clips.filter { it.track == 0 }.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) },
+                                project.clips.filter { it.track != 0 }.maxOfOrNull { it.positionMs + (it.endMs - it.startMs).coerceAtLeast(0L) } ?: 0L
+                            )
                             var previewPlaying by remember(selected) { mutableStateOf(false) }
                             val previewPlayer = remember(previewClip?.uri, previewClip?.startMs, previewClip?.endMs) {
                                 previewClip?.takeIf { it.kind == "video" || it.kind == "audio" }?.let { clip ->
@@ -298,7 +302,20 @@ class MainActivity : ComponentActivity() {
                             DisposableEffect(previewPlayer) {
                                 onDispose { previewPlayer?.release() }
                             }
-                            LaunchedEffect(previewPlayer) { previewPlaying = false }
+                            LaunchedEffect(previewPlayer) {
+                                if (previewPlayer != null) previewPlaying = false
+                            }
+                            LaunchedEffect(previewPlaying, previewPlayer, timelineEndMs) {
+                                if (previewPlayer != null || !previewPlaying) return@LaunchedEffect
+                                var previous = android.os.SystemClock.elapsedRealtime()
+                                while (previewPlaying && playheadMs < timelineEndMs) {
+                                    kotlinx.coroutines.delay(40L)
+                                    val now = android.os.SystemClock.elapsedRealtime()
+                                    playheadMs = (playheadMs + now - previous).coerceAtMost(timelineEndMs)
+                                    previous = now
+                                }
+                                previewPlaying = false
+                            }
                             LaunchedEffect(previewPlayer, previewPlaying) {
                                 if (previewPlayer == null) return@LaunchedEffect
                                 if (!previewPlaying) {
@@ -392,8 +409,10 @@ class MainActivity : ComponentActivity() {
                                 } else if (previewClip?.kind == "audio") {
                                     EqualizerPreview(playheadMs - previewStart, Modifier.fillMaxSize())
                                 } else {
-                                    Text("Import main video or audio to preview", color = Color.White,
-                                        modifier = Modifier.align(Alignment.Center))
+                                    if (project.clips.none { it.track == 1 }) {
+                                        Text("Add media or text to preview", color = Color.White,
+                                            modifier = Modifier.align(Alignment.Center))
+                                    }
                                 }
                                 project.clips.forEachIndexed { clipIndex, overlay ->
                                     if (overlay.track == 1 &&
@@ -500,18 +519,18 @@ class MainActivity : ComponentActivity() {
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(enabled = previewPlayer != null, onClick = {
+                                IconButton(enabled = timelineEndMs > 0L, onClick = {
                                     previewPlaying = false
                                     playheadMs = (playheadMs - 5000L).coerceAtLeast(0L)
                                 }) { Icon(Icons.Default.Replay5, "Back 5 seconds") }
-                                IconButton(enabled = previewPlayer != null, onClick = {
+                                IconButton(enabled = timelineEndMs > 0L, onClick = {
                                     previewPlaying = !previewPlaying
                                 }) { Icon(if (previewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     if (previewPlaying) "Pause" else "Play") }
-                                IconButton(enabled = previewPlayer != null, onClick = {
+                                IconButton(enabled = timelineEndMs > 0L, onClick = {
                                     previewPlaying = false
                                     playheadMs = (playheadMs + 5000L).coerceAtMost(
-                                        project.clips.filter { it.track == 0 }.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) })
+                                        timelineEndMs)
                                 }) { Icon(Icons.Default.Forward5, "Forward 5 seconds") }
                                 Text("${"%.1f".format(java.util.Locale.US, playheadMs / 1000.0)}s",
                                     style = MaterialTheme.typography.bodySmall)
@@ -589,8 +608,11 @@ class MainActivity : ComponentActivity() {
                                 clips = project.clips,
                                 selectedIndex = activeClip,
                                 playheadMs = playheadMs,
-                                onSelect = { i -> activeClip = i; playheadMs = 0L },
-                                onScrub = { time -> playheadMs = time },
+                                onSelect = { i -> activeClip = i },
+                                onScrub = { time ->
+                                    previewPlaying = false
+                                    playheadMs = time.coerceIn(0L, timelineEndMs)
+                                },
                                 onMove = { index, position ->
                                     val cs = projects[selected].clips.toMutableList()
                                     if (index in cs.indices && cs[index].track != 0) {
