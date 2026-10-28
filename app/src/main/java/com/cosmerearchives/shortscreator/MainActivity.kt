@@ -305,6 +305,48 @@ class MainActivity : ComponentActivity() {
                                 }
                                 Spacer(Modifier.height(12.dp))
                             }
+                            Spacer(Modifier.height(10.dp))
+                            Text("Tools", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(10.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                val toolShape = RoundedCornerShape(16.dp)
+                                ElevatedCard(onClick = {
+                                    sharedLibrary = true
+                                    showLibrary = true
+                                    showSettings = false
+                                }, modifier = Modifier.weight(1f), shape = toolShape,
+                                    colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Default.VideoLibrary, null, tint = purple)
+                                        Spacer(Modifier.height(7.dp))
+                                        Text("Media Library", style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                                ElevatedCard(onClick = {
+                                    bulkProjectMode = !bulkProjectMode
+                                    projectDeleteTargets = emptySet()
+                                }, modifier = Modifier.weight(1f), shape = toolShape,
+                                    colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Default.FolderOpen, null, tint = purple)
+                                        Spacer(Modifier.height(7.dp))
+                                        Text("Manage", style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                                ElevatedCard(onClick = { showSettings = true; selected = -1 },
+                                    modifier = Modifier.weight(1f), shape = toolShape,
+                                    colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Default.Settings, null, tint = purple)
+                                        Spacer(Modifier.height(7.dp))
+                                        Text("Settings", style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                            }
                         } else {
                             val project = projects[selected]
                             Text(project.name + " · " + project.ratio, style = MaterialTheme.typography.titleMedium)
