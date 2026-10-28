@@ -865,7 +865,7 @@ class MainActivity : ComponentActivity() {
                                                 Text(Uri.parse(item.uri).lastPathSegment ?: "Media file", maxLines = 2)
                                                 Text("Selection: ${"%.1f".format(item.startMs / 1000.0)}s – ${"%.1f".format(item.endMs / 1000.0)}s",
                                                     style = MaterialTheme.typography.bodySmall)
-                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                     Button(onClick = {
                                                         if (selected in projects.indices) {
                                                             val updated = projects.toMutableList()
