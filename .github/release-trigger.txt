@@ -1,2 +1,2 @@
 Release request: v0.41.0-alpha
-Build 42 - permanent transport controls beneath audio and video preview
+Build 42 - external transport controls and buffering-safe playback loop
