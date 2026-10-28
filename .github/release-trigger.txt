@@ -1,2 +1,2 @@
-Release request: v0.41.0-alpha
-Build 42 - external transport controls and buffering-safe playback loop
+Release request: v0.42.0-alpha
+Build 43 - synchronized ExoPlayer pause and background audio lifecycle handling
