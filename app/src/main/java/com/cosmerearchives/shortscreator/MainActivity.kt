@@ -64,7 +64,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "")
 data class LibraryMedia(val uri: String, val kind: String, val startMs: Long, val endMs: Long)
 private fun readLibrary(context: android.content.Context): List<LibraryMedia> = try {
     val data = JSONArray(context.getSharedPreferences("media_library", android.content.Context.MODE_PRIVATE).getString("items", "[]"))
@@ -123,6 +123,9 @@ class MainActivity : ComponentActivity() {
             var availableUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
             var downloading by remember { mutableStateOf(false) }
             var exportStatus by remember { mutableStateOf("") }
+            var speechGenerationStatus by remember { mutableStateOf("") }
+            var speechGenerating by remember { mutableStateOf(false) }
+            val ttsScope = rememberCoroutineScope()
             var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
             var libraryItems by remember { mutableStateOf(readLibrary(this@MainActivity)) }
             var showLibrary by remember { mutableStateOf(false) }
@@ -653,12 +656,50 @@ class MainActivity : ComponentActivity() {
                                 OutlinedTextField(value = currentClip.caption, label = { Text("Caption text") },
                                     onValueChange = { value ->
                                         val cs = project.clips.toMutableList()
-                                        cs[activeClip] = currentClip.copy(caption = value.take(160))
+                                        cs[activeClip] = currentClip.copy(caption = value.take(160), ttsUri = "")
                                         val updated = projects.toMutableList()
                                         updated[selected] = project.copy(clips = cs)
                                         projects = updated
                                         saveProjects(updated)
                                     }, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(value = currentClip.spokenText, label = { Text("Spoken text (leave blank to use caption)") },
+                                    onValueChange = { value ->
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(spokenText = value.take(1000), ttsUri = "")
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }, modifier = Modifier.fillMaxWidth())
+                                Button(enabled = !speechGenerating, onClick = {
+                                    speechGenerating = true
+                                    speechGenerationStatus = "Generating spoken audio…"
+                                    val projectId = project.id
+                                    val clipIndex = activeClip
+                                    val spoken = currentClip.spokenText.ifBlank { currentClip.caption }
+                                    ttsScope.launch {
+                                        try {
+                                            val (speechUri, duration) = TextSpeech.generate(this@MainActivity, projectId, spoken)
+                                            if (selected in projects.indices && projects[selected].id == projectId) {
+                                                val cs = projects[selected].clips.toMutableList()
+                                                val clip = cs.getOrNull(clipIndex)
+                                                if (clip != null && clip.kind == "text") {
+                                                    cs[clipIndex] = clip.copy(ttsUri = speechUri,
+                                                        endMs = duration.coerceAtLeast(500L))
+                                                    val updated = projects.toMutableList()
+                                                    updated[selected] = projects[selected].copy(clips = cs)
+                                                    projects = updated
+                                                    saveProjects(updated)
+                                                    speechGenerationStatus = "Speech created: ${duration / 1000.0}s. Text duration matched."
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            speechGenerationStatus = "Speech generation failed: ${e.message}"
+                                        } finally { speechGenerating = false }
+                                    }
+                                }) { Text(if (speechGenerating) "Generating…" else "Generate text-to-speech") }
+                                if (currentClip.ttsUri.isNotBlank()) Text("Speech linked to this overlay", style = MaterialTheme.typography.bodySmall)
+                                if (speechGenerationStatus.isNotBlank()) Text(speechGenerationStatus, style = MaterialTheme.typography.bodySmall)
                                 Text("Font size")
                                 Slider(value = currentClip.textSize.coerceIn(24f, 110f), valueRange = 24f..110f,
                                     onValueChange = { v ->
@@ -1079,7 +1120,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat())
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""))
             }, obj.optString("id", "legacy-project-$i"))
         }
     }
@@ -1102,7 +1143,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble())) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText)) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("id", p.id).put("clips", clips))
         }
         val serialized = arr.toString()
