@@ -231,7 +231,7 @@ class MainActivity : ComponentActivity() {
                             val project = projects[selected]
                             Text(project.name + " · " + project.ratio, style = MaterialTheme.typography.titleMedium)
                             Spacer(Modifier.height(8.dp))
-                            var activeClip by remember(selected) { mutableIntStateOf(0) }
+                            var activeClip by remember(selected) { mutableIntStateOf(project.clips.indexOfFirst { it.track == 0 }.coerceAtLeast(0)) }
                             var playheadMs by remember(selected) { mutableLongStateOf(0L) }
                             val currentClip = project.clips.getOrNull(activeClip)
                             var previewStart = 0L
@@ -525,6 +525,32 @@ class MainActivity : ComponentActivity() {
                                         val updated = projects.toMutableList()
                                         updated[selected] = projects[selected].copy(clips = cs)
                                         projects = updated
+                                        saveProjects(updated)
+                                    }
+                                },
+                                onTrim = { index, start, end ->
+                                    val clip = projects[selected].clips.getOrNull(index)
+                                    if (clip != null && clip.kind != "text") {
+                                        val maxDuration = getDuration(Uri.parse(clip.uri)).coerceAtLeast(clip.endMs)
+                                        val cs = projects[selected].clips.toMutableList()
+                                        cs[index] = clip.copy(startMs = start.coerceAtLeast(0L),
+                                            endMs = end.coerceAtMost(maxDuration).coerceAtLeast(start + 100L))
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = projects[selected].copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }
+                                },
+                                onReorder = { from, to ->
+                                    val cs = projects[selected].clips.toMutableList()
+                                    if (from in cs.indices && to in cs.indices && cs[from].track == 0 && cs[to].track == 0) {
+                                        val moved = cs.removeAt(from)
+                                        cs.add(to, moved)
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = projects[selected].copy(clips = cs)
+                                        projects = updated
+                                        activeClip = to
+                                        playheadMs = 0L
                                         saveProjects(updated)
                                     }
                                 }
