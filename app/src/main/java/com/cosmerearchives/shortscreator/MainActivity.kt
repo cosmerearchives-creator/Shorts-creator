@@ -78,8 +78,22 @@ private fun writeLibrary(context: android.content.Context, items: List<LibraryMe
     context.getSharedPreferences("media_library", android.content.Context.MODE_PRIVATE)
         .edit().putString("items", data.toString()).apply()
 }
+private fun readProjectLibrary(context: android.content.Context, id: String): List<LibraryMedia> = try {
+    val data = JSONArray(context.getSharedPreferences("project_media_libraries", android.content.Context.MODE_PRIVATE)
+        .getString(id, "[]"))
+    (0 until data.length()).map { i ->
+        val o = data.getJSONObject(i)
+        LibraryMedia(o.getString("uri"), o.getString("kind"), o.getLong("start"), o.getLong("end"))
+    }
+} catch (_: Exception) { emptyList() }
+private fun writeProjectLibrary(context: android.content.Context, id: String, items: List<LibraryMedia>) {
+    val array = JSONArray()
+    items.forEach { array.put(JSONObject().put("uri", it.uri).put("kind", it.kind).put("start", it.startMs).put("end", it.endMs)) }
+    context.getSharedPreferences("project_media_libraries", android.content.Context.MODE_PRIVATE)
+        .edit().putString(id, array.toString()).apply()
+}
 data class PendingImport(val uri: String, val kind: String, val track: Int, val durationMs: Long)
-data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList())
+data class Project(val name: String, val ratio: String, val clips: List<Clip> = emptyList(), val id: String = java.util.UUID.randomUUID().toString())
 
 class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("projects", MODE_PRIVATE) }
@@ -110,13 +124,20 @@ class MainActivity : ComponentActivity() {
             var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
             var libraryItems by remember { mutableStateOf(readLibrary(this@MainActivity)) }
             var showLibrary by remember { mutableStateOf(false) }
+            var sharedLibrary by remember { mutableStateOf(false) }
+            var projectLibraryItems by remember { mutableStateOf<List<LibraryMedia>>(emptyList()) }
+            val currentProjectId = projects.getOrNull(selected)?.id
+            LaunchedEffect(currentProjectId) {
+                projectLibraryItems = if (currentProjectId != null) readProjectLibrary(this@MainActivity, currentProjectId) else emptyList()
+            }
+            val visibleLibrary = if (sharedLibrary || currentProjectId == null) libraryItems else projectLibraryItems
             var librarySpeechQuery by remember { mutableStateOf("") }
             var libraryResults by remember { mutableStateOf<Map<String, List<SpeechMatch>>>(emptyMap()) }
-            LaunchedEffect(libraryItems, librarySpeechQuery, showLibrary) {
+            LaunchedEffect(visibleLibrary, librarySpeechQuery, showLibrary) {
                 libraryResults = if (!showLibrary || librarySpeechQuery.isBlank()) emptyMap() else
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         val cache = TranscriptCache(this@MainActivity)
-                        libraryItems.filter { it.kind != "image" }.associate { item ->
+                        visibleLibrary.filter { it.kind != "image" }.associate { item ->
                             val words = cache.load(cache.sourceKey(Uri.parse(item.uri), "ggml-tiny.en-v1")).orEmpty()
                             item.uri to SpeechSearch.find(words, librarySpeechQuery).take(10)
                         }
@@ -148,7 +169,7 @@ class MainActivity : ComponentActivity() {
                                 IconButton(onClick = { selected = -1; showSettings = false }) { Icon(Icons.Default.ArrowBack, "Back") }
                             }
                             Text("Shorts Creator", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { showLibrary = true; showSettings = false }) { Text("Library") }
+                            TextButton(onClick = { sharedLibrary = true; showLibrary = true; showSettings = false }) { Text("Media Library") }
                             IconButton(onClick = { showSettings = !showSettings; selected = -1 }) { Icon(Icons.Default.Settings, "Settings") }
                         }
                         Spacer(Modifier.height(12.dp))
@@ -439,8 +460,8 @@ class MainActivity : ComponentActivity() {
                                 style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { selectedTrack = 0; showLibrary = true }) { Text("Media library") }
-                                OutlinedButton(onClick = { selectedTrack = 1; showLibrary = true }) { Text("Add overlay") }
+                                Button(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Text("Media library") }
+                                OutlinedButton(onClick = { selectedTrack = 1; sharedLibrary = false; showLibrary = true }) { Text("Add overlay") }
                                 OutlinedButton(onClick = {
                                     val updated = projects.toMutableList()
                                     val cs = project.clips + Clip("", "text", 1, 0L, 5000L, playheadMs, caption = "New title")
@@ -801,12 +822,16 @@ class MainActivity : ComponentActivity() {
                             Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     IconButton(onClick = { showLibrary = false }) { Icon(Icons.Default.ArrowBack, "Back") }
-                                    Text("Media library", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                                    Text(if (sharedLibrary || currentProjectId == null) "Media Library" else "Project Library", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(onClick = { sharedLibrary = false }, enabled = currentProjectId != null && sharedLibrary) { Text("Project") }
+                                    OutlinedButton(onClick = { sharedLibrary = true }, enabled = !sharedLibrary) { Text("Shared") }
                                 }
                                 Button(onClick = { launcher.launch(arrayOf("video/*", "audio/*", "image/*")) }) {
                                     Text("Import files into library")
                                 }
-                                Text("Imported media stays in your library. Choose Add to timeline when you're ready.",
+                                Text(if (sharedLibrary || currentProjectId == null) "Shared media can be used by any project." else "Project imports stay here unless you explicitly save them to the shared library.",
                                     style = MaterialTheme.typography.bodySmall)
                                 OutlinedTextField(
                                     value = librarySpeechQuery,
@@ -817,13 +842,13 @@ class MainActivity : ComponentActivity() {
                                 )
                                 if (libraryBusy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                                 if (libraryStatus.isNotBlank()) Text(libraryStatus, style = MaterialTheme.typography.bodySmall)
-                                if (libraryItems.isEmpty()) Text("Your library is empty. Import a file to get started.")
+                                if (visibleLibrary.isEmpty()) Text("This library is empty. Import a file to get started.")
                                 if (librarySpeechQuery.isNotBlank())
                                     Text("${libraryResults.values.sumOf { it.size }} matching phrase(s)",
                                         style = MaterialTheme.typography.bodySmall)
                                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    libraryItems.forEachIndexed { index, item ->
+                                    visibleLibrary.forEachIndexed { index, item ->
                                         val matches = libraryResults[item.uri].orEmpty()
                                         if (librarySpeechQuery.isBlank() || matches.isNotEmpty()) {
                                         ElevatedCard(Modifier.fillMaxWidth()) {
@@ -859,9 +884,23 @@ class MainActivity : ComponentActivity() {
                                                             if (item.kind == "image") 5000L else getDuration(Uri.parse(item.uri)))
                                                     }) { Text("Trim / Search") }
                                                     TextButton(onClick = {
-                                                        libraryItems = libraryItems.filterIndexed { i, _ -> i != index }
-                                                        writeLibrary(this@MainActivity, libraryItems)
+                                                        if (sharedLibrary || currentProjectId == null) {
+                                                            libraryItems = libraryItems.filterIndexed { i, _ -> i != index }
+                                                            writeLibrary(this@MainActivity, libraryItems)
+                                                        } else {
+                                                            projectLibraryItems = projectLibraryItems.filterIndexed { i, _ -> i != index }
+                                                            writeProjectLibrary(this@MainActivity, currentProjectId, projectLibraryItems)
+                                                        }
                                                     }) { Text("Remove") }
+                                                }
+                                                if (!sharedLibrary && currentProjectId != null) {
+                                                    OutlinedButton(onClick = {
+                                                        if (libraryItems.none { it.uri == item.uri }) {
+                                                            libraryItems = libraryItems + item
+                                                            writeLibrary(this@MainActivity, libraryItems)
+                                                        }
+                                                        libraryStatus = "Saved to shared Media Library."
+                                                    }) { Text("Save to Media Library") }
                                                 }
                                                 val local = item.uri.startsWith("file://") &&
                                                     Uri.parse(item.uri).path?.startsWith(filesDir.absolutePath + "/media-archive/") == true
@@ -938,12 +977,14 @@ class MainActivity : ComponentActivity() {
                         ImportReviewDialog(pending,
                             onCancel = { pendingImport = null },
                             onConfirm = { start, end ->
-                                val updated = libraryItems.toMutableList()
                                 val entry = LibraryMedia(pending.uri, pending.kind, start, end)
-                                val prior = updated.indexOfFirst { it.uri == pending.uri }
-                                if (prior >= 0) updated[prior] = entry else updated.add(entry)
-                                libraryItems = updated
-                                writeLibrary(this@MainActivity, updated)
+                                if (sharedLibrary || currentProjectId == null) {
+                                    libraryItems = libraryItems.filterNot { it.uri == entry.uri } + entry
+                                    writeLibrary(this@MainActivity, libraryItems)
+                                } else {
+                                    projectLibraryItems = projectLibraryItems.filterNot { it.uri == entry.uri } + entry
+                                    writeProjectLibrary(this@MainActivity, currentProjectId, projectLibraryItems)
+                                }
                                 pendingImport = null
                             })
                     }
@@ -1007,7 +1048,7 @@ class MainActivity : ComponentActivity() {
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
                 Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat())
-            })
+            }, obj.optString("id", "legacy-project-$i"))
         }
     }
 
@@ -1030,7 +1071,7 @@ class MainActivity : ComponentActivity() {
         projects.forEach { p ->
             val clips = JSONArray()
             p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble())) }
-            arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("clips", clips))
+            arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("id", p.id).put("clips", clips))
         }
         val serialized = arr.toString()
         val previous = prefs.getString("data", null)
