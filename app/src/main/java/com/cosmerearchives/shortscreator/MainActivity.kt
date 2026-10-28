@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity() {
                             if (selected >= 0 || showSettings) {
                                 IconButton(onClick = { selected = -1; showSettings = false }) { Icon(Icons.Default.ArrowBack, "Back") }
                             }
-                            Text("Spanreed Vision", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            Text("Storm Vision", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             TextButton(onClick = { sharedLibrary = true; showLibrary = true; showSettings = false }) { Text("Media Library") }
                             IconButton(onClick = { showSettings = !showSettings; selected = -1 }) { Icon(Icons.Default.Settings, "Settings") }
                         }
@@ -221,7 +221,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 Spacer(Modifier.height(12.dp))
                             }
-                            Text("Create without limits.", style = MaterialTheme.typography.headlineMedium,
+                            Text("Connect Your Sight", style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.Bold, color = ink)
                             Spacer(Modifier.height(14.dp))
                             Button(onClick = { newDialog = true },
