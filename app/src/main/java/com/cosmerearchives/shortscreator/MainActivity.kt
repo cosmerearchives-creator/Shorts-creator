@@ -334,6 +334,47 @@ class MainActivity : ComponentActivity() {
                                     if (kotlin.math.abs(previewPlayer.currentPosition - pos) > 80L) previewPlayer.seekTo(pos)
                                 }
                             }
+                            // Text-linked speech follows the main transport and the overlay's position.
+                            val speechOverlays = project.clips.filter {
+                                it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank()
+                            }
+                            val speechPlayers = remember(project.id, speechOverlays.map { it.ttsUri }) {
+                                speechOverlays.associate { clip ->
+                                    clip.ttsUri to ExoPlayer.Builder(this@MainActivity).build().apply {
+                                        setMediaItem(MediaItem.fromUri(Uri.parse(clip.ttsUri)))
+                                        prepare()
+                                    }
+                                }
+                            }
+                            DisposableEffect(speechPlayers) {
+                                onDispose { speechPlayers.values.forEach { it.release() } }
+                            }
+                            LaunchedEffect(speechPlayers, previewPlaying, playheadMs) {
+                                speechOverlays.forEach { textClip ->
+                                    val speechPlayer = speechPlayers[textClip.ttsUri] ?: return@forEach
+                                    val relative = playheadMs - textClip.positionMs
+                                    val active = previewPlaying && relative >= 0L &&
+                                        relative < (textClip.endMs - textClip.startMs)
+                                    if (active) {
+                                        if (kotlin.math.abs(speechPlayer.currentPosition - relative) > 300L) {
+                                            speechPlayer.seekTo(relative)
+                                        }
+                                        if (!speechPlayer.playWhenReady) speechPlayer.play()
+                                    } else if (speechPlayer.playWhenReady) {
+                                        speechPlayer.pause()
+                                    }
+                                }
+                            }
+                            val speechLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                            DisposableEffect(speechPlayers, speechLifecycle) {
+                                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                                    if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                                        speechPlayers.values.forEach { it.pause() }
+                                    }
+                                }
+                                speechLifecycle.lifecycle.addObserver(observer)
+                                onDispose { speechLifecycle.lifecycle.removeObserver(observer) }
+                            }
                             var previewSize by remember { mutableStateOf(IntSize.Zero) }
                             val frameContext = LocalContext.current
                             Box(Modifier.fillMaxWidth().height(240.dp).background(dark, RoundedCornerShape(16.dp))
