@@ -1,2 +1,2 @@
-Release request: v0.58.0-alpha
-Build 59 - timeline drag and drawing optimization
+Release request: v0.59.0-alpha
+Build 60 - fixed viewport timeline rendering and scrolling
