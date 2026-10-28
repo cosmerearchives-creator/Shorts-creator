@@ -1,2 +1,2 @@
-Release request: v0.60.0-alpha
-Build 61 - display installed version on projects menu
+Release request: v0.61.0-alpha
+Build 62 - true project aspect ratio editor preview canvas
