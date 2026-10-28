@@ -593,9 +593,9 @@ class MainActivity : ComponentActivity() {
                             val overlayClips = project.clips.filter { it.track == 1 }
                             val unsupportedOverlays = overlayClips.any { it.kind != "image" }
                             Button(
-                                enabled = mainClips.isNotEmpty() && mainClips.all { it.kind == "video" && it.endMs > it.startMs },
+                                enabled = (mainClips.isEmpty() && overlayClips.isNotEmpty()) || (mainClips.isNotEmpty() && mainClips.all { it.kind == "video" && it.endMs > it.startMs }),
                                 onClick = {
-                                    exportStatus = "Exporting main timeline…"
+                                    exportStatus = "Preparing timeline export…"
                                     try {
                                         Exporter.exportTimeline(this@MainActivity, project.clips, project.ratio) { status ->
                                             runOnUiThread { exportStatus = status }
