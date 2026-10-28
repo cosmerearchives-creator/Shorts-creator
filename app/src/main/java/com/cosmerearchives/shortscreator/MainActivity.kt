@@ -260,14 +260,33 @@ class MainActivity : ComponentActivity() {
                             }
                             LaunchedEffect(previewPlayer) { previewPlaying = false }
                             LaunchedEffect(previewPlayer, previewPlaying) {
-                                if (!previewPlaying || previewPlayer == null) return@LaunchedEffect
+                                if (previewPlayer == null) return@LaunchedEffect
+                                if (!previewPlaying) {
+                                    previewPlayer.pause()
+                                    return@LaunchedEffect
+                                }
                                 previewPlayer.play()
-                                while (previewPlaying && previewPlayer.playWhenReady && previewPlayer.playbackState != androidx.media3.common.Player.STATE_ENDED) {
+                                while (previewPlayer.playWhenReady &&
+                                    previewPlayer.playbackState != androidx.media3.common.Player.STATE_ENDED) {
                                     playheadMs = previewStart + previewPlayer.currentPosition
                                     kotlinx.coroutines.delay(60L)
                                 }
-                                previewPlaying = false
                                 previewPlayer.pause()
+                                previewPlaying = false
+                            }
+                            val previewLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                            DisposableEffect(previewPlayer, previewLifecycle) {
+                                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                                    if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                                        previewPlayer?.pause()
+                                        previewPlaying = false
+                                    }
+                                }
+                                previewLifecycle.lifecycle.addObserver(observer)
+                                onDispose {
+                                    previewLifecycle.lifecycle.removeObserver(observer)
+                                    previewPlayer?.pause()
+                                }
                             }
                             LaunchedEffect(playheadMs, previewPlayer, previewPlaying) {
                                 if (!previewPlaying && previewPlayer != null) {
