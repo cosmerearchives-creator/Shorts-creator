@@ -262,7 +262,7 @@ class MainActivity : ComponentActivity() {
                             LaunchedEffect(previewPlayer, previewPlaying) {
                                 if (!previewPlaying || previewPlayer == null) return@LaunchedEffect
                                 previewPlayer.play()
-                                while (previewPlaying && previewPlayer.isPlaying) {
+                                while (previewPlaying && previewPlayer.playWhenReady && previewPlayer.playbackState != androidx.media3.common.Player.STATE_ENDED) {
                                     playheadMs = previewStart + previewPlayer.currentPosition
                                     kotlinx.coroutines.delay(60L)
                                 }
