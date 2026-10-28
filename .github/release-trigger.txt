@@ -1,2 +1,2 @@
-Release request: v0.43.0-alpha
-Build 44 - direct timeline trimming, clip movement and main clip selection
+Release request: v0.44.0-alpha
+Build 45 - timeline direct drag gesture fix
