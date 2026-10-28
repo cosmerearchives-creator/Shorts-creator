@@ -11,8 +11,9 @@ import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellati
 import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -78,7 +79,8 @@ fun EditingTimeline(
     val end = clips.indices.maxOfOrNull { positions[it] + durations[it] } ?: 0L
     val total = max(15000L, end + 4000L)
     val widthDp = START_DP + total / 1000f * PX_PER_SECOND_DP * zoom + 25
-    val scroll = rememberScrollState()
+    var scrollPx by remember { mutableFloatStateOf(0f) }
+    val visibleScroll = rememberUpdatedState(scrollPx)
     val liveClips = rememberUpdatedState(clips)
     val livePositions = rememberUpdatedState(positions)
     val liveDurations = rememberUpdatedState(durations)
@@ -100,17 +102,25 @@ fun EditingTimeline(
         }
         Text("Playhead: %.1fs".format(playheadMs / 1000.0), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(6.dp))
-        Column(Modifier.fillMaxWidth().horizontalScroll(scroll)) {
-            Canvas(Modifier.width(widthDp.dp).height(32.dp).pointerInput(total, zoom) {
-                detectTapGestures { tap -> onScrub(((tap.x - leftPx) / pxPerMs).toLong().coerceIn(0, total)) }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val viewportPx = with(density) { maxWidth.toPx() }
+            val maxScrollPx = (with(density) { widthDp.dp.toPx() } - viewportPx).coerceAtLeast(0f)
+            val scrollState = rememberScrollableState { distance ->
+                val old = scrollPx
+                scrollPx = (scrollPx - distance).coerceIn(0f, maxScrollPx)
+                old - scrollPx
+            }
+            Column(Modifier.fillMaxWidth().scrollable(scrollState, Orientation.Horizontal)) {
+            Canvas(Modifier.fillMaxWidth().height(32.dp).pointerInput(total, zoom) {
+                detectTapGestures { tap -> onScrub(((tap.x + visibleScroll.value - leftPx) / pxPerMs).toLong().coerceIn(0, total)) }
             }) {
                 drawRect(timelineDark)
                 val paint = Paint().apply { color = android.graphics.Color.WHITE; textSize = 11.sp.toPx(); isAntiAlias = true }
-                val bounds = drawContext.canvas.nativeCanvas.clipBounds
-                val first = (((bounds.left - leftPx) / (pxPerMs * 1000f)).toInt() - 1).coerceAtLeast(0)
-                val last = (((bounds.right - leftPx) / (pxPerMs * 1000f)).toInt() + 1).coerceAtMost((total / 1000L).toInt())
+                val scroll = visibleScroll.value
+                val first = (((scroll - leftPx) / (pxPerMs * 1000f)).toInt() - 1).coerceAtLeast(0)
+                val last = (((scroll + size.width - leftPx) / (pxPerMs * 1000f)).toInt() + 1).coerceAtMost((total / 1000L).toInt())
                 for (second in first..last) {
-                    val x = leftPx + second * pxPerMs * 1000f
+                    val x = leftPx + second * pxPerMs * 1000f - scroll
                     if (second % 5 == 0) {
                         drawLine(Color(0xFFE6DEEE), Offset(x, 12.dp.toPx()), Offset(x, size.height), 1.dp.toPx())
                         drawContext.canvas.nativeCanvas.drawText("${second}s", x + 2.dp.toPx(), 11.dp.toPx(), paint)
@@ -118,17 +128,17 @@ fun EditingTimeline(
                         drawLine(Color(0xFF625A6C), Offset(x, 21.dp.toPx()), Offset(x, size.height), 1f)
                     }
                 }
-                val playX = leftPx + playheadMs * pxPerMs
+                val playX = leftPx + playheadMs * pxPerMs - visibleScroll.value
                 drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
             }
             lanes.forEach { (lane, label) ->
-                Canvas(Modifier.width(widthDp.dp).height(61.dp).pointerInput(lane, zoom) {
+                Canvas(Modifier.fillMaxWidth().height(61.dp).pointerInput(lane, zoom) {
                     awaitEachGesture {
                         val clips = liveClips.value
                         val positions = livePositions.value
                         val durations = liveDurations.value
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        val time = ((down.position.x - leftPx) / pxPerMs).toLong().coerceAtLeast(0L)
+                        val time = ((down.position.x + visibleScroll.value - leftPx) / pxPerMs).toLong().coerceAtLeast(0L)
                         val moving = clips.indices.lastOrNull { i ->
                             clips[i].track == lane && time in positions[i]..(positions[i] + durations[i])
                         }
@@ -194,13 +204,13 @@ fun EditingTimeline(
                     drawRect(timelineDark)
                     val paint = Paint().apply { isAntiAlias = true; textSize = 12.sp.toPx(); color = android.graphics.Color.WHITE }
                     drawContext.canvas.nativeCanvas.drawText(label, 7.dp.toPx(), 32.dp.toPx(), paint)
-                    drawLine(Color(0xFF524B5D), Offset(leftPx, size.height - 1f), Offset(size.width, size.height - 1f))
-                    val visible = drawContext.canvas.nativeCanvas.clipBounds
+                    drawLine(Color(0xFF524B5D), Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f))
+                    val scroll = visibleScroll.value
                     clips.indices.filter { clips[it].track == lane &&
-                        leftPx + (positions[it] + durations[it]) * pxPerMs >= visible.left &&
-                        leftPx + positions[it] * pxPerMs <= visible.right
+                        leftPx + (positions[it] + durations[it]) * pxPerMs >= scroll &&
+                        leftPx + positions[it] * pxPerMs <= scroll + size.width
                     }.forEach { i ->
-                        val x = leftPx + positions[i] * pxPerMs
+                        val x = leftPx + positions[i] * pxPerMs - scroll
                         val w = max(12.dp.toPx(), durations[i] * pxPerMs - 2.dp.toPx())
                         val tint = if (clips[i].kind == "audio") audioColor else if (lane == 0) videoColor else overlayColor
                         drawRect(tint, Offset(x, 8.dp.toPx()), androidx.compose.ui.geometry.Size(w, 44.dp.toPx()))
@@ -214,7 +224,7 @@ fun EditingTimeline(
                         val clipText = paint.let { android.text.TextUtils.ellipsize(names[i], android.text.TextPaint(it), (w - 10.dp.toPx()).coerceAtLeast(0f), android.text.TextUtils.TruncateAt.END).toString() }
                         drawContext.canvas.nativeCanvas.drawText(clipText, x + 5.dp.toPx(), 34.dp.toPx(), paint)
                     }
-                    val playX = leftPx + playheadMs * pxPerMs
+                    val playX = leftPx + playheadMs * pxPerMs - visibleScroll.value
                     drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
                 }
             }
