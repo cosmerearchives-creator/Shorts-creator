@@ -144,7 +144,7 @@ fun EditingTimeline(
                         },
                         onDragCancel = { moving = -1 }
                     )
- {
+                }) {
                     drawRect(timelineDark)
                     val paint = Paint().apply { isAntiAlias = true; textSize = 12.sp.toPx(); color = android.graphics.Color.WHITE }
                     drawContext.canvas.nativeCanvas.drawText(label, 7.dp.toPx(), 32.dp.toPx(), paint)
