@@ -244,16 +244,51 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             val previewClip = previewIndex?.let { project.clips[it] }
+                            var previewPlaying by remember(selected) { mutableStateOf(false) }
+                            val previewPlayer = remember(previewClip?.uri, previewClip?.startMs, previewClip?.endMs) {
+                                previewClip?.takeIf { it.kind == "video" || it.kind == "audio" }?.let { clip ->
+                                    ExoPlayer.Builder(this@MainActivity).build().apply {
+                                        setMediaItem(MediaItem.Builder().setUri(Uri.parse(clip.uri))
+                                            .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                                                .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build())
+                                        prepare()
+                                    }
+                                }
+                            }
+                            DisposableEffect(previewPlayer) {
+                                onDispose { previewPlayer?.release() }
+                            }
+                            LaunchedEffect(previewPlayer) { previewPlaying = false }
+                            LaunchedEffect(previewPlayer, previewPlaying) {
+                                if (!previewPlaying || previewPlayer == null) return@LaunchedEffect
+                                previewPlayer.play()
+                                while (previewPlaying && previewPlayer.isPlaying) {
+                                    playheadMs = previewStart + previewPlayer.currentPosition
+                                    kotlinx.coroutines.delay(60L)
+                                }
+                                previewPlaying = false
+                                previewPlayer.pause()
+                            }
+                            LaunchedEffect(playheadMs, previewPlayer, previewPlaying) {
+                                if (!previewPlaying && previewPlayer != null) {
+                                    val pos = (playheadMs - previewStart).coerceAtLeast(0L)
+                                    if (kotlin.math.abs(previewPlayer.currentPosition - pos) > 80L) previewPlayer.seekTo(pos)
+                                }
+                            }
                             var previewSize by remember { mutableStateOf(IntSize.Zero) }
                             val frameContext = LocalContext.current
                             Box(Modifier.fillMaxWidth().height(240.dp).background(dark, RoundedCornerShape(16.dp))
                                 .onSizeChanged { previewSize = it }) {
                                 if (previewClip != null && previewClip.kind == "video") {
-                                    val seekMs = (playheadMs - previewStart).coerceAtLeast(0L)
-                                    key(previewClip.uri, previewClip.startMs, previewClip.endMs) {
-                                        VideoPreview(previewClip.uri, previewClip.startMs, previewClip.endMs, seekMs,
-                                            Modifier.fillMaxSize())
-                                    }
+                                    AndroidView(
+                                        factory = { ctx -> PlayerView(ctx).apply {
+                                            player = previewPlayer
+                                            useController = false
+                                            setKeepContentOnPlayerReset(true)
+                                        } },
+                                        update = { view -> view.player = previewPlayer },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
                                 } else if (previewClip?.kind == "audio") {
                                     EqualizerPreview(playheadMs - previewStart, Modifier.fillMaxSize())
                                 } else {
@@ -362,6 +397,24 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 }
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(enabled = previewPlayer != null, onClick = {
+                                    previewPlaying = false
+                                    playheadMs = (playheadMs - 5000L).coerceAtLeast(0L)
+                                }) { Icon(Icons.Default.Replay5, "Back 5 seconds") }
+                                IconButton(enabled = previewPlayer != null, onClick = {
+                                    previewPlaying = !previewPlaying
+                                }) { Icon(if (previewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    if (previewPlaying) "Pause" else "Play") }
+                                IconButton(enabled = previewPlayer != null, onClick = {
+                                    previewPlaying = false
+                                    playheadMs = (playheadMs + 5000L).coerceAtMost(
+                                        project.clips.filter { it.track == 0 }.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) })
+                                }) { Icon(Icons.Default.Forward5, "Forward 5 seconds") }
+                                Text("${"%.1f".format(java.util.Locale.US, playheadMs / 1000.0)}s",
+                                    style = MaterialTheme.typography.bodySmall)
                             }
                             Text("Preview shows overlays at the playhead. Drag captions, images and PiP video to reposition; select PiP to resize with its slider.",
                                 style = MaterialTheme.typography.bodySmall)
