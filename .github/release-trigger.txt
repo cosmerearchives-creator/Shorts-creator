@@ -1,2 +1,2 @@
-Release request: v0.44.0-alpha
-Build 45 - stable unified drag handling during recomposition
+Release request: v0.45.0-alpha
+Build 46 - project media library and shared library separation
