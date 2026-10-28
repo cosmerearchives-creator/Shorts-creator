@@ -113,6 +113,14 @@ object Exporter {
             builder.addItem(EditedMediaItem.Builder(item).build())
             sequences.add(builder.build())
         }
+        clips.filter { it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank() }.forEach { caption ->
+            val speech = android.net.Uri.parse(caption.ttsUri)
+            val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
+            if (caption.positionMs > 0L) builder.addGap(caption.positionMs * 1000L)
+            val item = MediaItem.Builder().setUri(speech).build()
+            builder.addItem(EditedMediaItem.Builder(item).build())
+            sequences.add(builder.build())
+        }
         val pipVideos = visualOverlays.filter { it.kind == "video" }
         pipVideos.forEach { clip ->
             require(clip.endMs > clip.startMs) { "Video overlay has no valid duration" }
