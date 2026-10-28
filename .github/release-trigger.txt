@@ -1,2 +1,2 @@
-Release request: v0.46.0-alpha
-Build 47 - image and video thumbnails, audio waveform preview, library layout fix
+Release request: v0.47.0-alpha
+Build 48 - compact horizontally wrapping icon actions in media libraries
