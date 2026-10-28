@@ -1,2 +1,2 @@
-Release request: v0.51.0-alpha
-Build 52 - Android Back navigation and consolidated builder notes
+Release request: v0.52.0-alpha
+Build 53 - timeline zoom buttons
