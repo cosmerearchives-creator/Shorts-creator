@@ -1,2 +1,2 @@
-Release request: v0.62.0-alpha
-Build 63 - Spanreed Vision name and enchanted gem pen icon
+Release request: v0.63.0-alpha
+Build 64 - Spanreed Vision project dashboard visual redesign
