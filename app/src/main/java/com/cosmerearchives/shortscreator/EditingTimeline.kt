@@ -2,7 +2,11 @@ package com.cosmerearchives.shortscreator
 
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.horizontalDrag
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -78,72 +82,68 @@ fun EditingTimeline(
                 drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
             }
             lanes.forEach { (lane, label) ->
-                Canvas(Modifier.width(widthDp.dp).height(61.dp).pointerInput(clips, positions, durations) {
-                    detectTapGestures { tap ->
-                        val time = ((tap.x - leftPx) / pxPerMs).toLong().coerceAtLeast(0L)
-                        val chosen = clips.indices.lastOrNull { i -> clips[i].track == lane && time in positions[i]..(positions[i] + durations[i]) }
-                        if (chosen != null) onSelect(chosen) else onScrub(time.coerceAtMost(total))
-                    }
-                }.pointerInput(clips, positions, durations, selectedIndex) {
-                    var moving = -1
-                    var action = 0 // 1=start trim, 2=end trim, 3=move
-                    var deltaTime = 0L
-                    var startPosition = 0L
-                    detectDragGestures(
-                        onDragStart = { pos ->
-                            val time = ((pos.x - leftPx) / pxPerMs).toLong().coerceAtLeast(0L)
-                            moving = clips.indices.lastOrNull { i ->
-                                clips[i].track == lane && time in positions[i]..(positions[i] + durations[i])
-                            } ?: -1
-                            if (moving >= 0) {
-                                onSelect(moving)
-                                val offset = time - positions[moving]
-                                val edgeMs = (12.dp.toPx() / pxPerMs).toLong()
-                                action = when {
-                                    offset <= edgeMs -> 1
-                                    durations[moving] - offset <= edgeMs -> 2
-                                    else -> 3
-                                }
-                                startPosition = positions[moving]
-                                deltaTime = 0L
-                            }
-                        },
-                        onDrag = { change, amount ->
+                Canvas(Modifier.width(widthDp.dp).height(61.dp).pointerInput(clips, positions, durations, lane) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val time = ((down.position.x - leftPx) / pxPerMs).toLong().coerceAtLeast(0L)
+                        val moving = clips.indices.lastOrNull { i ->
+                            clips[i].track == lane && time in positions[i]..(positions[i] + durations[i])
+                        }
+                        val start = moving?.let { positions[it] } ?: 0L
+                        val initialClip = moving?.let { clips[it] }
+                        val edgeMs = (14.dp.toPx() / pxPerMs).toLong()
+                        val offset = time - start
+                        val action = if (moving == null) 0 else when {
+                            offset <= edgeMs -> 1
+                            durations[moving] - offset <= edgeMs -> 2
+                            else -> 3
+                        }
+                        var totalDx = 0f
+                        var currentStart = initialClip?.startMs ?: 0L
+                        var currentEnd = initialClip?.endMs ?: 0L
+                        var currentPosition = start
+                        val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, beyond ->
                             change.consume()
-                            if (moving >= 0) {
-                                deltaTime += (amount.x / pxPerMs).toLong()
-                                val clip = clips[moving]
-                                when (action) {
-                                    1 -> {
-                                        val newStart = (clip.startMs + (amount.x / pxPerMs).toLong())
-                                            .coerceIn(0L, (clip.endMs - 100L).coerceAtLeast(0L))
-                                        onTrim(moving, newStart, clip.endMs)
-                                    }
-                                    2 -> {
-                                        val newEnd = (clip.endMs + (amount.x / pxPerMs).toLong())
-                                            .coerceAtLeast(clip.startMs + 100L)
-                                        onTrim(moving, clip.startMs, newEnd)
-                                    }
-                                    3 -> if (clip.track != 0) {
-                                        val newPosition = (startPosition + deltaTime).coerceAtLeast(0L)
-                                        onMove(moving, newPosition)
+                            totalDx += beyond
+                        }
+                        if (drag == null) {
+                            if (moving != null) onSelect(moving) else onScrub(time.coerceAtMost(total))
+                        } else {
+                            if (moving != null) onSelect(moving)
+                            if (moving != null && initialClip != null) {
+                                fun update(dx: Float) {
+                                    val delta = (dx / pxPerMs).toLong()
+                                    when (action) {
+                                        1 -> {
+                                            currentStart = (currentStart + delta).coerceIn(0L, (currentEnd - 100L).coerceAtLeast(0L))
+                                            onTrim(moving, currentStart, currentEnd)
+                                        }
+                                        2 -> {
+                                            currentEnd = (currentEnd + delta).coerceAtLeast(currentStart + 100L)
+                                            onTrim(moving, currentStart, currentEnd)
+                                        }
+                                        3 -> if (initialClip.track != 0) {
+                                            currentPosition = (currentPosition + delta).coerceAtLeast(0L)
+                                            onMove(moving, currentPosition)
+                                        }
                                     }
                                 }
-                            }
-                        },
-                        onDragEnd = {
-                            if (moving >= 0 && action == 3 && clips[moving].track == 0) {
-                                val mainOrder = clips.indices.filter { clips[it].track == 0 }
-                                val targetTime = positions[moving] + deltaTime + durations[moving] / 2L
-                                val destination = mainOrder.minByOrNull {
-                                    kotlin.math.abs((positions[it] + durations[it] / 2L) - targetTime)
+                                update(totalDx)
+                                horizontalDrag(drag.id) { change ->
+                                    val dx = change.positionChange().x
+                                    change.consume()
+                                    totalDx += dx
+                                    update(dx)
                                 }
-                                if (destination != null && destination != moving) onReorder(moving, destination)
+                                if (action == 3 && initialClip.track == 0) {
+                                    val destinationTime = start + (totalDx / pxPerMs).toLong() + durations[moving] / 2
+                                    val destination = clips.indices.filter { clips[it].track == 0 }
+                                        .minByOrNull { kotlin.math.abs(positions[it] + durations[it] / 2 - destinationTime) }
+                                    if (destination != null && destination != moving) onReorder(moving, destination)
+                                }
                             }
-                            moving = -1
-                        },
-                        onDragCancel = { moving = -1 }
-                    )
+                        }
+                    }
                 }) {
                     drawRect(timelineDark)
                     val paint = Paint().apply { isAntiAlias = true; textSize = 12.sp.toPx(); color = android.graphics.Color.WHITE }
