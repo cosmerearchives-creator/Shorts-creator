@@ -1,2 +1,2 @@
-Release request: v0.53.0-alpha
-Build 54 - linked text-to-speech with measured overlay duration
+Release request: v0.54.0-alpha
+Build 55 - audible TTS test, linked status and synchronized editor speech
