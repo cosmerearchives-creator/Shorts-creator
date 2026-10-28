@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.core.view.WindowCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -125,6 +126,14 @@ class MainActivity : ComponentActivity() {
             var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
             var libraryItems by remember { mutableStateOf(readLibrary(this@MainActivity)) }
             var showLibrary by remember { mutableStateOf(false) }
+            BackHandler(enabled = showLibrary || showSettings || selected >= 0 || showDevNotes) {
+                when {
+                    showDevNotes -> showDevNotes = false
+                    showLibrary -> showLibrary = false
+                    showSettings -> showSettings = false
+                    selected >= 0 -> selected = -1
+                }
+            }
             var sharedLibrary by remember { mutableStateOf(false) }
             var projectLibraryItems by remember { mutableStateOf<List<LibraryMedia>>(emptyList()) }
             val currentProjectId = projects.getOrNull(selected)?.id
@@ -794,7 +803,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             Spacer(Modifier.height(48.dp))
-                            Text("V0.5: scrollable timeline, splitting and clip rearrangement. Full multitrack export remains a later milestone.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     if (showDevNotes) {
@@ -806,6 +814,7 @@ class MainActivity : ComponentActivity() {
                                     Text("Shorts Creator development preview")
                                     Text("Video overlays export as picture-in-picture; select an overlay to adjust position and size.")
                                     Text("Audio-only equalizer export currently has limited visual overlay support.")
+                                    Text("Timeline supports scrolling, splitting and rearranging clips. Full multitrack export remains a development milestone.")
                                 }
                             },
                             confirmButton = { TextButton(onClick = { showDevNotes = false }) { Text("Close") } }
