@@ -980,7 +980,6 @@ private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs:
 }
 
 @Composable
-@Composable
 private fun EqualizerPreview(positionMs: Long, modifier: Modifier = Modifier) {
     Canvas(modifier.background(dark)) {
         val bars = 32
