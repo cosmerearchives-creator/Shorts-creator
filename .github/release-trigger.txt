@@ -1,2 +1,2 @@
-Release request: v0.47.0-alpha
-Build 48 - compact horizontally wrapping icon actions in media libraries
+Release request: v0.48.0-alpha
+Build 49 - compact editor action icons and simplified descriptions
