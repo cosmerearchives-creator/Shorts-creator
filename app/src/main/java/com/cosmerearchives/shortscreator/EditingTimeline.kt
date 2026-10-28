@@ -19,6 +19,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
@@ -110,8 +113,8 @@ fun EditingTimeline(
                 scrollPx = (scrollPx - distance).coerceIn(0f, maxScrollPx)
                 old - scrollPx
             }
-            Column(Modifier.fillMaxWidth().scrollable(scrollState, Orientation.Horizontal)) {
-            Canvas(Modifier.fillMaxWidth().height(32.dp).pointerInput(total, zoom) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clipToBounds().scrollable(scrollState, Orientation.Horizontal)) {
+            Canvas(Modifier.fillMaxWidth().height(32.dp).clipToBounds().pointerInput(total, zoom) {
                 detectTapGestures { tap -> onScrub(((tap.x + visibleScroll.value - leftPx) / pxPerMs).toLong().coerceIn(0, total)) }
             }) {
                 drawRect(timelineDark)
@@ -132,7 +135,7 @@ fun EditingTimeline(
                 drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
             }
             lanes.forEach { (lane, label) ->
-                Canvas(Modifier.fillMaxWidth().height(61.dp).pointerInput(lane, zoom) {
+                Canvas(Modifier.fillMaxWidth().height(61.dp).clipToBounds().pointerInput(lane, zoom) {
                     awaitEachGesture {
                         val clips = liveClips.value
                         val positions = livePositions.value
