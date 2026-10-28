@@ -180,6 +180,5 @@ fun EditingTimeline(
                 }
             }
         }
-        Text("Drag clip edges to trim. Drag the center to move overlays or reorder main clips.", style = MaterialTheme.typography.bodySmall)
     }
 }
