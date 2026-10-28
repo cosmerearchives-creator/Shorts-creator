@@ -1,2 +1,2 @@
-Release request: v0.59.0-alpha
-Build 60 - fixed viewport timeline rendering and scrolling
+Release retry: v0.59.0-alpha
+Build 60 - fix timeline viewport compile brace
