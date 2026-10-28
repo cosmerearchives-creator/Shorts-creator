@@ -926,8 +926,13 @@ class MainActivity : ComponentActivity() {
                                                                         LibraryMedia(newUri.toString(), item.kind, item.startMs, item.endMs)
                                                                     } catch (e: Exception) { file.delete(); throw e }
                                                                 }
-                                                                libraryItems = libraryItems.map { if (it.uri == item.uri) copied else it }
-                                                                writeLibrary(this@MainActivity, libraryItems)
+                                                                if (sharedLibrary || currentProjectId == null) {
+                                                                    libraryItems = libraryItems.map { if (it.uri == item.uri) copied else it }
+                                                                    writeLibrary(this@MainActivity, libraryItems)
+                                                                } else {
+                                                                    projectLibraryItems = projectLibraryItems.map { if (it.uri == item.uri) copied else it }
+                                                                    writeProjectLibrary(this@MainActivity, currentProjectId, projectLibraryItems)
+                                                                }
                                                                 libraryStatus = "Saved offline. Existing projects continue using their original media source."
                                                             } catch (e: Exception) {
                                                                 libraryStatus = "Offline copy failed: ${e.message}"
@@ -966,8 +971,13 @@ class MainActivity : ComponentActivity() {
                                 val uri = Uri.parse(toDelete.uri)
                                 val path = uri.path
                                 if (path != null && path.startsWith(filesDir.absolutePath + "/media-archive/")) java.io.File(path).delete()
-                                libraryItems = libraryItems.filterNot { it.uri == toDelete.uri }
-                                writeLibrary(this@MainActivity, libraryItems)
+                                if (sharedLibrary || currentProjectId == null) {
+                                    libraryItems = libraryItems.filterNot { it.uri == toDelete.uri }
+                                    writeLibrary(this@MainActivity, libraryItems)
+                                } else {
+                                    projectLibraryItems = projectLibraryItems.filterNot { it.uri == toDelete.uri }
+                                    writeProjectLibrary(this@MainActivity, currentProjectId, projectLibraryItems)
+                                }
                                 confirmMediaDeletion = null
                             }) { Text("Delete copy") } },
                             dismissButton = { TextButton(onClick = { confirmMediaDeletion = null }) { Text("Cancel") } }
