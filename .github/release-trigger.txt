@@ -1,2 +1,2 @@
-Release request: v0.40.0-alpha
-Build 41 - fixed duplicate Compose annotation for equalizer preview
+Release request: v0.41.0-alpha
+Build 42 - permanent transport controls beneath audio and video preview
