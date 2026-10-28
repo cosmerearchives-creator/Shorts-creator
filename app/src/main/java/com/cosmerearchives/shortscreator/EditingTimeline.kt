@@ -59,6 +59,14 @@ fun EditingTimeline(
     val total = max(15000L, end + 4000L)
     val widthDp = START_DP + total / 1000f * PX_PER_SECOND_DP + 25
     val scroll = rememberScrollState()
+    val liveClips = rememberUpdatedState(clips)
+    val livePositions = rememberUpdatedState(positions)
+    val liveDurations = rememberUpdatedState(durations)
+    val liveSelect = rememberUpdatedState(onSelect)
+    val liveScrub = rememberUpdatedState(onScrub)
+    val liveMove = rememberUpdatedState(onMove)
+    val liveTrim = rememberUpdatedState(onTrim)
+    val liveReorder = rememberUpdatedState(onReorder)
     val lanes = listOf(1 to "Overlay", 0 to "Main", 2 to "Audio")
     Column {
         Text("Timeline • tap ruler to scrub", style = MaterialTheme.typography.labelMedium)
@@ -83,8 +91,11 @@ fun EditingTimeline(
                 drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
             }
             lanes.forEach { (lane, label) ->
-                Canvas(Modifier.width(widthDp.dp).height(61.dp).pointerInput(clips, positions, durations, lane) {
+                Canvas(Modifier.width(widthDp.dp).height(61.dp).pointerInput(lane) {
                     awaitEachGesture {
+                        val clips = liveClips.value
+                        val positions = livePositions.value
+                        val durations = liveDurations.value
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val time = ((down.position.x - leftPx) / pxPerMs).toLong().coerceAtLeast(0L)
                         val moving = clips.indices.lastOrNull { i ->
@@ -108,24 +119,24 @@ fun EditingTimeline(
                             totalDx += beyond
                         }
                         if (drag == null) {
-                            if (moving != null) onSelect(moving) else onScrub(time.coerceAtMost(total))
+                            if (moving != null) liveSelect.value(moving) else liveScrub.value(time.coerceAtMost(total))
                         } else {
-                            if (moving != null) onSelect(moving)
+                            if (moving != null) liveSelect.value(moving)
                             if (moving != null && initialClip != null) {
                                 fun update(dx: Float) {
                                     val delta = (dx / pxPerMs).toLong()
                                     when (action) {
                                         1 -> {
                                             currentStart = (currentStart + delta).coerceIn(0L, (currentEnd - 100L).coerceAtLeast(0L))
-                                            onTrim(moving, currentStart, currentEnd)
+                                            liveTrim.value(moving, currentStart, currentEnd)
                                         }
                                         2 -> {
                                             currentEnd = (currentEnd + delta).coerceAtLeast(currentStart + 100L)
-                                            onTrim(moving, currentStart, currentEnd)
+                                            liveTrim.value(moving, currentStart, currentEnd)
                                         }
                                         3 -> if (initialClip.track != 0) {
                                             currentPosition = (currentPosition + delta).coerceAtLeast(0L)
-                                            onMove(moving, currentPosition)
+                                            liveMove.value(moving, currentPosition)
                                         }
                                     }
                                 }
@@ -140,7 +151,7 @@ fun EditingTimeline(
                                     val destinationTime = start + (totalDx / pxPerMs).toLong() + durations[moving] / 2
                                     val destination = clips.indices.filter { clips[it].track == 0 }
                                         .minByOrNull { kotlin.math.abs(positions[it] + durations[it] / 2 - destinationTime) }
-                                    if (destination != null && destination != moving) onReorder(moving, destination)
+                                    if (destination != null && destination != moving) liveReorder.value(moving, destination)
                                 }
                             }
                         }
