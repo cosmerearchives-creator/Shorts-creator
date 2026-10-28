@@ -1,2 +1,2 @@
-Release request: v0.42.0-alpha
-Build 43 - synchronized ExoPlayer pause and background audio lifecycle handling
+Release request: v0.43.0-alpha
+Build 44 - direct timeline trimming, clip movement and main clip selection
