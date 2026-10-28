@@ -221,54 +221,89 @@ class MainActivity : ComponentActivity() {
                                 }
                                 Spacer(Modifier.height(12.dp))
                             }
+                            Text("Create without limits.", style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold, color = ink)
+                            Spacer(Modifier.height(14.dp))
+                            Button(onClick = { newDialog = true },
+                                modifier = Modifier.fillMaxWidth().height(76.dp),
+                                shape = RoundedCornerShape(18.dp)) {
+                                Icon(Icons.Default.AddCircle, null)
+                                Spacer(Modifier.width(10.dp))
+                                Text("New project", style = MaterialTheme.typography.titleMedium)
+                            }
+                            Spacer(Modifier.height(22.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Your projects", style = MaterialTheme.typography.titleMedium,
-                                    modifier = Modifier.weight(1f))
+                                Text("Recent projects", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                 IconButton(onClick = { showDevNotes = true }) {
-                                    Icon(Icons.Default.Error, "Development notes", tint = Color(0xFFC03936))
+                                    Icon(Icons.Default.Error, "Builder notes", tint = Color(0xFFC03936))
                                 }
                             }
                             Text("Version ${BuildConfig.VERSION_NAME} · Build ${BuildConfig.VERSION_CODE}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(12.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { newDialog = true }) { Icon(Icons.Default.Add, null); Text(" New project") }
-                                OutlinedButton(onClick = { bulkProjectMode = !bulkProjectMode; projectDeleteTargets = emptySet() }) {
-                                    Text(if (bulkProjectMode) "Done selecting" else "Select projects")
-                                }
-                            }
+                            OutlinedButton(onClick = {
+                                bulkProjectMode = !bulkProjectMode
+                                projectDeleteTargets = emptySet()
+                            }) { Text(if (bulkProjectMode) "Done selecting" else "Select projects") }
                             if (bulkProjectMode && projectDeleteTargets.isNotEmpty()) {
                                 Button(onClick = { confirmProjectDelete = true }) {
                                     Text("Delete selected (${projectDeleteTargets.size})")
                                 }
                             }
-                            Spacer(Modifier.height(16.dp))
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                projects.indices.forEach { index ->
-                                    Card(onClick = {
-                                        if (bulkProjectMode) projectDeleteTargets = if (index in projectDeleteTargets)
-                                            projectDeleteTargets - index else projectDeleteTargets + index
-                                        else selected = index
-                                    }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                                        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                if (bulkProjectMode) Checkbox(
-                                                    checked = index in projectDeleteTargets,
-                                                    onCheckedChange = { checked ->
-                                                        projectDeleteTargets = if (checked) projectDeleteTargets + index else projectDeleteTargets - index
+                            Spacer(Modifier.height(12.dp))
+                            projects.indices.chunked(2).forEach { pair ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    pair.forEach { index ->
+                                        val item = projects[index]
+                                        ElevatedCard(onClick = {
+                                            if (bulkProjectMode) projectDeleteTargets =
+                                                if (index in projectDeleteTargets) projectDeleteTargets - index
+                                                else projectDeleteTargets + index
+                                            else selected = index
+                                        }, modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.elevatedCardColors(containerColor = Color.White)) {
+                                            Column {
+                                                val cover = item.clips.firstOrNull {
+                                                    it.kind == "video" || it.kind == "image"
+                                                }
+                                                if (cover != null) {
+                                                    LibraryMediaPreview(
+                                                        LibraryMedia(cover.uri, cover.kind, cover.startMs, cover.endMs),
+                                                        Modifier.fillMaxWidth().height(108.dp)
+                                                    )
+                                                } else {
+                                                    Box(Modifier.fillMaxWidth().height(108.dp)
+                                                        .background(Color(0xFFE9E1F2)),
+                                                        contentAlignment = Alignment.Center) {
+                                                        Icon(Icons.Default.Movie, null, tint = purple)
                                                     }
-                                                )
-                                                Text(projects[index].name, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                                if (!bulkProjectMode) TextButton(onClick = {
-                                                    projectDeleteTargets = setOf(index)
-                                                    confirmProjectDelete = true
-                                                }) { Text("Delete") }
+                                                }
+                                                Column(Modifier.padding(10.dp)) {
+                                                    Text(item.name, fontWeight = FontWeight.SemiBold,
+                                                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                                    Text("${item.ratio} · ${item.clips.size} clips",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    if (bulkProjectMode) Checkbox(
+                                                        checked = index in projectDeleteTargets,
+                                                        onCheckedChange = { checked ->
+                                                            projectDeleteTargets = if (checked)
+                                                                projectDeleteTargets + index else projectDeleteTargets - index
+                                                        }
+                                                    ) else TextButton(onClick = {
+                                                        projectDeleteTargets = setOf(index)
+                                                        confirmProjectDelete = true
+                                                    }) { Text("Delete") }
+                                                }
                                             }
-                                            Text("${projects[index].ratio} · ${projects[index].clips.size} media items")
                                         }
                                     }
+                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
                                 }
+                                Spacer(Modifier.height(12.dp))
                             }
                         } else {
                             val project = projects[selected]
