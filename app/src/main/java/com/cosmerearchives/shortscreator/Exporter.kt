@@ -35,13 +35,27 @@ object Exporter {
     fun exportTimeline(context: Context, clips: List<Clip>, ratio: String, callback: (String) -> Unit) {
         val (outputWidth, outputHeight) = exportDimensions(ratio)
         val presentation = Presentation.createForWidthAndHeight(outputWidth, outputHeight, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)
-        val main = clips.filter { it.track == 0 }
-        require(main.isNotEmpty()) { "Add main media before exporting" }
-        if (main.all { it.kind == "audio" }) {
+        val sourceMain = clips.filter { it.track == 0 }
+        if (sourceMain.isNotEmpty() && sourceMain.all { it.kind == "audio" }) {
             exportAudioEqualizer(context, clips, ratio, callback)
             return
         }
-        require(main.all { it.kind == "video" && it.endMs > it.startMs }) {
+        val overlayOnly = sourceMain.isEmpty()
+        val durationMs = clips.filter { it.track != 0 }.maxOfOrNull {
+            it.positionMs + (it.endMs - it.startMs).coerceAtLeast(0L)
+        } ?: 0L
+        require(!overlayOnly || durationMs > 0L) { "Add text or an overlay before exporting" }
+        val main = if (overlayOnly) {
+            val background = File(context.cacheDir, "text-export-background.png")
+            if (!background.exists()) {
+                val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+                bitmap.eraseColor(AndroidColor.rgb(41, 38, 48))
+                background.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                bitmap.recycle()
+            }
+            listOf(Clip(Uri.fromFile(background).toString(), "image", 0, 0L, durationMs))
+        } else sourceMain
+        require(overlayOnly || main.all { it.kind == "video" && it.endMs > it.startMs }) {
             "Timeline export currently supports trimmed video clips on the main track only"
         }
         val output = File(context.cacheDir, "timeline-${System.currentTimeMillis()}.mp4")
@@ -80,7 +94,9 @@ object Exporter {
         val edits = main.map { clip ->
             val segmentStart = timelineStartMs
             timelineStartMs += clip.endMs - clip.startMs
-            val media = MediaItem.Builder().setUri(Uri.parse(clip.uri))
+            val media = if (overlayOnly) {
+                MediaItem.Builder().setUri(Uri.parse(clip.uri)).setImageDurationMs(durationMs).build()
+            } else MediaItem.Builder().setUri(Uri.parse(clip.uri))
                 .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                     .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
             val overlays = (images + captions).map { (image, bitmap) ->
@@ -100,7 +116,8 @@ object Exporter {
             val effects = if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()
             EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), listOf(presentation) + effects)).build()
         }
-        val mainSequence = EditedMediaItemSequence.withAudioAndVideoFrom(edits)
+        val mainSequence = if (overlayOnly) EditedMediaItemSequence.withVideoFrom(edits)
+            else EditedMediaItemSequence.withAudioAndVideoFrom(edits)
         val audio = clips.filter { it.track == 2 && it.kind == "audio" }
         val sequences = mutableListOf(mainSequence)
         audio.forEach { clip ->
