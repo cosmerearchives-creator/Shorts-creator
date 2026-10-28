@@ -1083,6 +1083,18 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
         }
     }
     DisposableEffect(player) { onDispose { player?.release() } }
+    val importLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(player, importLifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) player?.pause()
+        }
+        importLifecycle.lifecycle.addObserver(observer)
+        onDispose {
+            importLifecycle.lifecycle.removeObserver(observer)
+            player?.pause()
+        }
+    }
+
     var thumbnails by remember(item.uri) { mutableStateOf<List<androidx.compose.ui.graphics.ImageBitmap>>(emptyList()) }
     LaunchedEffect(item.uri) {
         thumbnails = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
