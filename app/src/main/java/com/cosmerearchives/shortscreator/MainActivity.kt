@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity() {
                             if (selected >= 0 || showSettings) {
                                 IconButton(onClick = { selected = -1; showSettings = false }) { Icon(Icons.Default.ArrowBack, "Back") }
                             }
-                            Text("Shorts Creator", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            Text("Spanreed Vision", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             TextButton(onClick = { sharedLibrary = true; showLibrary = true; showSettings = false }) { Text("Media Library") }
                             IconButton(onClick = { showSettings = !showSettings; selected = -1 }) { Icon(Icons.Default.Settings, "Settings") }
                         }
