@@ -865,7 +865,7 @@ class MainActivity : ComponentActivity() {
                                                 Text(Uri.parse(item.uri).lastPathSegment ?: "Media file", maxLines = 2)
                                                 Text("Selection: ${"%.1f".format(item.startMs / 1000.0)}s – ${"%.1f".format(item.endMs / 1000.0)}s",
                                                     style = MaterialTheme.typography.bodySmall)
-                                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                     Button(onClick = {
                                                         if (selected in projects.indices) {
                                                             val updated = projects.toMutableList()
@@ -893,7 +893,6 @@ class MainActivity : ComponentActivity() {
                                                             writeProjectLibrary(this@MainActivity, currentProjectId, projectLibraryItems)
                                                         }
                                                     }) { Icon(Icons.Default.DeleteOutline, "Remove from library") }
-                                                }
                                                 if (!sharedLibrary && currentProjectId != null) {
                                                     OutlinedButton(onClick = {
                                                         if (libraryItems.none { it.uri == item.uri }) {
@@ -941,7 +940,6 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     }) { Icon(Icons.Default.Download, "Keep offline copy") }
                                                 } else {
-                                                    Text("Stored offline", style = MaterialTheme.typography.bodySmall)
                                                     OutlinedButton(onClick = { confirmMediaDeletion = item }) { Icon(Icons.Default.DeleteForever, "Delete offline copy") }
                                                 }
                                                 TextButton(onClick = {
@@ -953,7 +951,8 @@ class MainActivity : ComponentActivity() {
                                                         libraryStatus = "Deleted $count stored speech transcript section(s). Media is unchanged."
                                                         libraryResults = emptyMap()
                                                     }
-                                                }) { Icon(Icons.Default.TextSnippet, "Delete transcript only") }
+                                                }) { Icon(Icons.Default.TextSnippet, "Delete transcript only") } 
+                                                }
                                             }
                                         }
                                         }
