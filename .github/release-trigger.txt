@@ -1,2 +1,2 @@
-Release request: v0.57.0-alpha
-Build 58 - export text-only projects with TTS and no main media
+Release request: v0.58.0-alpha
+Build 59 - timeline drag and drawing optimization
