@@ -116,6 +116,7 @@ class MainActivity : ComponentActivity() {
             val libraryScope = rememberCoroutineScope()
             var newDialog by remember { mutableStateOf(false) }
             var showSettings by remember { mutableStateOf(false) }
+            var showDevNotes by remember { mutableStateOf(false) }
             var selectedTrack by remember { mutableIntStateOf(0) }
             var updateStatus by remember { mutableStateOf("") }
             var availableUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
@@ -208,7 +209,13 @@ class MainActivity : ComponentActivity() {
                                 }
                                 Spacer(Modifier.height(12.dp))
                             }
-                            Text("Your projects", style = MaterialTheme.typography.titleMedium)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Your projects", style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.weight(1f))
+                                IconButton(onClick = { showDevNotes = true }) {
+                                    Icon(Icons.Default.Error, "Development notes", tint = Color(0xFFC03936))
+                                }
+                            }
                             Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(onClick = { newDialog = true }) { Icon(Icons.Default.Add, null); Text(" New project") }
@@ -458,7 +465,6 @@ class MainActivity : ComponentActivity() {
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 IconButton(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.VideoLibrary, "Media library") }
-                                IconButton(onClick = { selectedTrack = 1; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.Layers, "Add overlay") }
                                 IconButton(onClick = {
                                     val updated = projects.toMutableList()
                                     val cs = project.clips + Clip("", "text", 1, 0L, 5000L, playheadMs, caption = "New title")
@@ -525,10 +531,6 @@ class MainActivity : ComponentActivity() {
                                     } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
                                 }
                             ) { Text("Export complete timeline") }
-                            if (overlayClips.isNotEmpty()) Text(
-                                "Note: V0.10 exports video overlays as small picture-in-picture windows in the upper right. Select a video overlay to adjust its size and position.",
-                                style = MaterialTheme.typography.bodySmall, color = Color(0xFF8D4738)
-                            )
                             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
                             EditingTimeline(
                                 clips = project.clips,
@@ -794,6 +796,20 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.height(48.dp))
                             Text("V0.5: scrollable timeline, splitting and clip rearrangement. Full multitrack export remains a later milestone.", style = MaterialTheme.typography.bodySmall)
                         }
+                    }
+                    if (showDevNotes) {
+                        AlertDialog(
+                            onDismissRequest = { showDevNotes = false },
+                            title = { Text("Build notes") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Shorts Creator development preview")
+                                    Text("Video overlays export as picture-in-picture; select an overlay to adjust position and size.")
+                                    Text("Audio-only equalizer export currently has limited visual overlay support.")
+                                }
+                            },
+                            confirmButton = { TextButton(onClick = { showDevNotes = false }) { Text("Close") } }
+                        )
                     }
                     if (confirmProjectDelete) {
                         AlertDialog(
