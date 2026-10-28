@@ -16,7 +16,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
@@ -58,7 +62,8 @@ fun EditingTimeline(
             display?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "Untitled media"
         } catch (_: Exception) { Uri.parse(clip.uri).lastPathSegment?.substringAfterLast('/') ?: "Untitled media" }
     } }
-    val pxPerMs = with(density) { PX_PER_SECOND_DP.dp.toPx() } / 1000f
+    var zoom by rememberSaveable { mutableFloatStateOf(1f) }
+    val pxPerMs = with(density) { (PX_PER_SECOND_DP * zoom).dp.toPx() } / 1000f
     val leftPx = with(density) { START_DP.dp.toPx() }
     val durations = clips.map { max(1000L, it.endMs - it.startMs) }
     var running = 0L
@@ -71,7 +76,7 @@ fun EditingTimeline(
     }
     val end = clips.indices.maxOfOrNull { positions[it] + durations[it] } ?: 0L
     val total = max(15000L, end + 4000L)
-    val widthDp = START_DP + total / 1000f * PX_PER_SECOND_DP + 25
+    val widthDp = START_DP + total / 1000f * PX_PER_SECOND_DP * zoom + 25
     val scroll = rememberScrollState()
     val liveClips = rememberUpdatedState(clips)
     val livePositions = rememberUpdatedState(positions)
@@ -83,7 +88,15 @@ fun EditingTimeline(
     val liveReorder = rememberUpdatedState(onReorder)
     val lanes = listOf(1 to "Overlay", 0 to "Main", 2 to "Audio")
     Column {
-        Text("Timeline • tap ruler to scrub", style = MaterialTheme.typography.labelMedium)
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Timeline", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+            IconButton(onClick = { zoom = (zoom / 1.5f).coerceAtLeast(0.25f) },
+                enabled = zoom > 0.25f) { Icon(Icons.Default.ZoomOut, "Zoom out timeline") }
+            Text("${(zoom * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
+            IconButton(onClick = { zoom = (zoom * 1.5f).coerceAtMost(8f) },
+                enabled = zoom < 8f) { Icon(Icons.Default.ZoomIn, "Zoom in timeline") }
+        }
         Text("Playhead: %.1fs".format(playheadMs / 1000.0), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(6.dp))
         Column(Modifier.fillMaxWidth().horizontalScroll(scroll)) {
