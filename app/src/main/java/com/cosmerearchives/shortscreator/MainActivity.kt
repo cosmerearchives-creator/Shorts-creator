@@ -692,10 +692,11 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.height(10.dp))
                             Text("Tools", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             val toolItems = listOf(
-                                Triple("Cut", Icons.Default.ContentCut, false),
+                                Triple("Cut", Icons.Default.ContentCut, true),
                                 Triple("Filters", Icons.Default.Tune, false),
                                 Triple("Transitions", Icons.Default.Animation, false),
                                 Triple("Delete", Icons.Default.DeleteOutline, true),
+                                Triple("Duplicate", Icons.Default.ContentCopy, true),
                                 Triple("Speed", Icons.Default.Speed, false),
                                 Triple("Volume", Icons.Default.VolumeUp, false),
                                 Triple("Text", Icons.Default.TextFields, true),
@@ -711,6 +712,44 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.size(58.dp),
                                             onClick = {
                                                 when (name) {
+                                                    "Cut" -> {
+                                                        val clip = currentClip
+                                                        if (clip != null && clip.kind == "video") {
+                                                            val preceding = if (clip.track == 0) {
+                                                                project.clips.indices.filter { it < activeClip && project.clips[it].track == 0 }
+                                                                    .sumOf { (project.clips[it].endMs - project.clips[it].startMs).coerceAtLeast(0L) }
+                                                            } else clip.positionMs
+                                                            val offset = playheadMs - preceding
+                                                            val duration = clip.endMs - clip.startMs
+                                                            if (offset >= 100L && offset <= duration - 100L) {
+                                                                val cs = project.clips.toMutableList()
+                                                                val cut = clip.startMs + offset
+                                                                cs[activeClip] = clip.copy(endMs = cut)
+                                                                cs.add(activeClip + 1, clip.copy(startMs = cut,
+                                                                    positionMs = if (clip.track == 0) 0L else playheadMs))
+                                                                val updated = projects.toMutableList()
+                                                                updated[selected] = project.copy(clips = cs)
+                                                                projects = updated
+                                                                activeClip += 1
+                                                                saveProjects(updated)
+                                                            }
+                                                        }
+                                                    }
+                                                    "Duplicate" -> {
+                                                        val clip = currentClip
+                                                        if (clip != null) {
+                                                            val cs = project.clips.toMutableList()
+                                                            cs.add(activeClip + 1, clip.copy(
+                                                                positionMs = if (clip.track == 0) 0L
+                                                                else clip.positionMs + (clip.endMs - clip.startMs).coerceAtLeast(0L)
+                                                            ))
+                                                            val updated = projects.toMutableList()
+                                                            updated[selected] = project.copy(clips = cs)
+                                                            projects = updated
+                                                            activeClip += 1
+                                                            saveProjects(updated)
+                                                        }
+                                                    }
                                                     "Delete" -> {
                                                         if (activeClip in project.clips.indices) {
                                                             val updated = projects.toMutableList()
@@ -735,7 +774,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         ) { Icon(picture, name, tint = purple) }
-                                        Text(if (implemented) name else "$" + "{name} · Soon",
+                                        Text(if (implemented) name else name + " · Soon",
                                             style = MaterialTheme.typography.labelSmall,
                                             maxLines = 2, textAlign = TextAlign.Center)
                                     }
