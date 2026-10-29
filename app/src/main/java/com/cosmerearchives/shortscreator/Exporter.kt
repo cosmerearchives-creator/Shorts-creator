@@ -128,7 +128,12 @@ object Exporter {
                         val timeMs = segmentStart + presentationTimeUs / 1000L
                         val visible = timeMs >= image.positionMs && timeMs < image.positionMs + image.endMs.coerceAtLeast(5000L)
                         return StaticOverlaySettings.Builder()
-                            .setAlphaScale(if (visible) 1f else 0f)
+                            .setAlphaScale(if (!visible) 0f else if (image.transition == "Fade in/out") {
+                                val elapsed = (timeMs - image.positionMs).coerceAtLeast(0L)
+                                val length = (image.endMs - image.startMs).coerceAtLeast(1L)
+                                val fade = minOf(400L, length / 3).coerceAtLeast(1L)
+                                minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
+                            } else 1f)
                             .setScale(if (image.kind == "image") image.imageScale else 1f, if (image.kind == "image") image.imageScale else 1f)
                             .setBackgroundFrameAnchor(when (image.kind) { "text" -> image.textX; "image" -> image.imageX; else -> 0f }, when (image.kind) { "text" -> image.textY; "image" -> image.imageY; else -> 0f })
                             .build()
