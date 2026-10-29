@@ -21,6 +21,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.media3.common.audio.SpeedProvider
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.VideoCompositorSettings
@@ -117,7 +118,12 @@ object Exporter {
                 }
             }
             val effects = if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()
-            EditedMediaItem.Builder(media).setEffects(Effects(
+            EditedMediaItem.Builder(media).apply {
+                if (!overlayOnly && clip.clipSpeed != 1f) setSpeed(object : SpeedProvider {
+                    override fun getSpeed(timeUs: Long): Float = clip.clipSpeed.coerceIn(0.5f, 2f)
+                    override fun getNextSpeedChangeTimeUs(timeUs: Long): Long = C.TIME_UNSET
+                })
+            }.setEffects(Effects(
                 if (clip.clipVolume < 0.999f && !overlayOnly) listOf(
                     ChannelMixingAudioProcessor().apply {
                         for (channels in 1..6) {
