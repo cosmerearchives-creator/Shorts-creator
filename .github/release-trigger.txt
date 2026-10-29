@@ -1,2 +1,2 @@
-Release request: v0.71.0-alpha
-Build 72 - video trim controls converted to horizontal adjustment tiles and popup editors
+Release request: v0.72.0-alpha
+Build 73 - trim popups with visual retained range and live time feedback
