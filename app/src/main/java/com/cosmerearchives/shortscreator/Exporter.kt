@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Color as AndroidColor
+import androidx.media3.common.audio.ChannelMixingAudioProcessor
+import androidx.media3.common.audio.ChannelMixingMatrix
 import androidx.media3.effect.RgbFilter
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.BitmapOverlay
@@ -115,7 +117,16 @@ object Exporter {
                 }
             }
             val effects = if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()
-            EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), listOf(presentation) + (if (clip.videoFilter == "Grayscale") listOf(RgbFilter.createGrayscaleFilter()) else emptyList()) + effects)).build()
+            EditedMediaItem.Builder(media).setEffects(Effects(
+                if (clip.clipVolume < 0.999f && !overlayOnly) listOf(
+                    ChannelMixingAudioProcessor().apply {
+                        for (channels in 1..6) {
+                            putChannelMixingMatrix(ChannelMixingMatrix.createForConstantPower(channels, channels).scaleBy(clip.clipVolume.coerceIn(0f, 1f)))
+                        }
+                    }
+                ) else emptyList(),
+                listOf(presentation) + (if (clip.videoFilter == "Grayscale") listOf(RgbFilter.createGrayscaleFilter()) else emptyList()) + effects
+            )).build()
         }
         val mainSequence = if (overlayOnly) EditedMediaItemSequence.withVideoFrom(edits)
             else EditedMediaItemSequence.withAudioAndVideoFrom(edits)
