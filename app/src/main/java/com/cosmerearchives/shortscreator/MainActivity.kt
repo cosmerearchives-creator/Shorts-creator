@@ -8,6 +8,7 @@ import android.media.MediaExtractor
 import android.media.MediaCodec
 import android.media.MediaFormat
 import java.nio.ByteOrder
+import androidx.media3.effect.RgbFilter
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -401,6 +402,12 @@ class MainActivity : ComponentActivity() {
                             LaunchedEffect(previewPlayer, previewClip?.clipSpeed) {
                                 previewPlayer?.setPlaybackSpeed(previewClip?.clipSpeed?.coerceIn(0.5f, 2f) ?: 1f)
                             }
+                            LaunchedEffect(previewPlayer, previewClip?.videoFilter) {
+                                previewPlayer?.setVideoEffects(
+                                    if (previewClip?.videoFilter == "Grayscale")
+                                        listOf(RgbFilter.createGrayscaleFilter()) else emptyList()
+                                )
+                            }
                             DisposableEffect(previewPlayer) {
                                 onDispose { previewPlayer?.release() }
                             }
@@ -524,6 +531,24 @@ class MainActivity : ComponentActivity() {
                                     if (project.clips.none { it.track == 1 }) {
                                         Text("Add media or text to preview", color = Color.White,
                                             modifier = Modifier.align(Alignment.Center))
+                                    }
+                                }
+                                // The current clip's incoming/outgoing fade is rendered over the editor preview.
+                                val mainVideoClips = project.clips.filter { it.track == 0 && it.kind == "video" }
+                                val activeMainIndex = mainVideoClips.indexOfFirst { it === previewClip }
+                                if (previewClip?.kind == "video" && activeMainIndex >= 0) {
+                                    val duration = ((previewClip.endMs - previewClip.startMs).coerceAtLeast(0L) /
+                                        previewClip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
+                                    val elapsed = (playheadMs - previewStart).coerceIn(0L, duration)
+                                    val fadeLength = minOf(400L, duration / 3).coerceAtLeast(1L)
+                                    val fadeIn = if (activeMainIndex > 0 && previewClip.transition == "Fade through black")
+                                        (1f - elapsed.toFloat() / fadeLength).coerceIn(0f, 1f) else 0f
+                                    val fadeOut = if (activeMainIndex < mainVideoClips.lastIndex &&
+                                        mainVideoClips[activeMainIndex + 1].transition == "Fade through black")
+                                        (1f - (duration - elapsed).toFloat() / fadeLength).coerceIn(0f, 1f) else 0f
+                                    val opacity = maxOf(fadeIn, fadeOut)
+                                    if (opacity > 0f) {
+                                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = opacity)))
                                     }
                                 }
                                 project.clips.forEachIndexed { clipIndex, overlay ->
@@ -669,6 +694,24 @@ class MainActivity : ComponentActivity() {
                                     if (project.clips.none { it.track == 1 }) {
                                         Text("Add media or text to preview", color = Color.White,
                                             modifier = Modifier.align(Alignment.Center))
+                                    }
+                                }
+                                // The current clip's incoming/outgoing fade is rendered over the editor preview.
+                                val mainVideoClips = project.clips.filter { it.track == 0 && it.kind == "video" }
+                                val activeMainIndex = mainVideoClips.indexOfFirst { it === previewClip }
+                                if (previewClip?.kind == "video" && activeMainIndex >= 0) {
+                                    val duration = ((previewClip.endMs - previewClip.startMs).coerceAtLeast(0L) /
+                                        previewClip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
+                                    val elapsed = (playheadMs - previewStart).coerceIn(0L, duration)
+                                    val fadeLength = minOf(400L, duration / 3).coerceAtLeast(1L)
+                                    val fadeIn = if (activeMainIndex > 0 && previewClip.transition == "Fade through black")
+                                        (1f - elapsed.toFloat() / fadeLength).coerceIn(0f, 1f) else 0f
+                                    val fadeOut = if (activeMainIndex < mainVideoClips.lastIndex &&
+                                        mainVideoClips[activeMainIndex + 1].transition == "Fade through black")
+                                        (1f - (duration - elapsed).toFloat() / fadeLength).coerceIn(0f, 1f) else 0f
+                                    val opacity = maxOf(fadeIn, fadeOut)
+                                    if (opacity > 0f) {
+                                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = opacity)))
                                     }
                                 }
                                 project.clips.forEachIndexed { clipIndex, overlay ->
