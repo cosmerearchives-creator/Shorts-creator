@@ -1078,7 +1078,7 @@ class MainActivity : ComponentActivity() {
                             Text("Selected clip", style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(8.dp))
-                            if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs && adjustment == "Trim") {
+                            if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs && adjustment in listOf("Trim", "In point", "Out point", "Trim range")) {
                                 val duration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
                                 if (duration > 0L) {
                                     Text("Trim: ${"%.2f".format(currentClip.startMs / 1000f)}s – ${"%.2f".format(currentClip.endMs / 1000f)}s",
