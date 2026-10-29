@@ -1,2 +1,2 @@
-Release request: v0.78.0-alpha
-Build 79 - version label in Settings and opt-in video Trim tool
+Release request: v0.79.0-alpha
+Build 80 - cross-media Cut/Trim and audio-track volume tools
