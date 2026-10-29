@@ -1,2 +1,2 @@
-Release request: v0.83.0-alpha
-Build 84 - offline audio clip speed and adjustable overlay fade duration
+Release request: v0.84.0-alpha
+Build 85 - clip move tools, dashboard Sort, duplicate split removal
