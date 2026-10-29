@@ -1,2 +1,2 @@
-Release request: v0.89.0-alpha
-Build 90 - continuous preview across clip boundaries and playback seek synchronization
+Release request: v0.90.0-alpha
+Build 91 - reduce image preview memory and redundant speech overlay scans
