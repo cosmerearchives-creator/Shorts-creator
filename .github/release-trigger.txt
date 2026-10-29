@@ -1,2 +1,2 @@
-Release request: v0.69.0-alpha
-Build 70 - fix text overlay timeline dragging and clip gesture conflict
+Release request: v0.70.0-alpha
+Build 71 - horizontal text and speech adjustment tiles with slider/color popups
