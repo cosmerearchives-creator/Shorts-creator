@@ -121,6 +121,7 @@ class MainActivity : ComponentActivity() {
             var showSettings by remember { mutableStateOf(false) }
             var sortProjectsByName by remember { mutableStateOf(false) }
             var showDevNotes by remember { mutableStateOf(false) }
+            var expandedLibraryUri by remember { mutableStateOf<String?>(null) }
             var selectedTrack by remember { mutableIntStateOf(0) }
             var updateStatus by remember { mutableStateOf("") }
             var availableUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
@@ -1673,13 +1674,24 @@ class MainActivity : ComponentActivity() {
                                         style = MaterialTheme.typography.bodySmall)
                                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    visibleLibrary.forEachIndexed { index, item ->
+                                    visibleLibrary.withIndex()
+                                        .filter { librarySpeechQuery.isBlank() || libraryResults[it.value.uri].orEmpty().isNotEmpty() }
+                                        .chunked(2).forEach { pair ->
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        pair.forEach { entry ->
+                                        val index = entry.index
+                                        val item = entry.value
                                         val matches = libraryResults[item.uri].orEmpty()
-                                        if (librarySpeechQuery.isBlank() || matches.isNotEmpty()) {
-                                        ElevatedCard(Modifier.fillMaxWidth()) {
-                                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                LibraryMediaPreview(item, Modifier.fillMaxWidth())
+                                        val expanded = expandedLibraryUri == item.uri
+                                        ElevatedCard(onClick = { expandedLibraryUri = if (expanded) null else item.uri },
+                                            modifier = Modifier.weight(1f)) {
+                                            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                                LibraryMediaPreview(item, Modifier.fillMaxWidth().height(96.dp))
                                                 Text(item.kind.uppercase(), style = MaterialTheme.typography.labelSmall)
+                                                Text(Uri.parse(item.uri).lastPathSegment ?: "Media file",
+                                                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                    style = MaterialTheme.typography.bodySmall)
+                                                if (expanded) {
                                                 if (matches.isNotEmpty()) {
                                                     Text("${matches.size} matching occurrence(s)", style = MaterialTheme.typography.bodySmall)
                                                     TextButton(onClick = {
@@ -1778,7 +1790,9 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 }) { Icon(Icons.Default.TextSnippet, "Delete transcript only") } 
                                                 }
+                                                }
                                             }
+                                        }
                                         }
                                         }
                                     }
