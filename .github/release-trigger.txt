@@ -1,2 +1,2 @@
-Release request: v0.88.0-alpha
-Build 89 - unified timeline timing and corrected overlay end boundaries
+Release request: v0.89.0-alpha
+Build 90 - continuous preview across clip boundaries and playback seek synchronization
