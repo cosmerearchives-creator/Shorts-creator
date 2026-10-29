@@ -349,6 +349,9 @@ class MainActivity : ComponentActivity() {
                             }
                         } else {
                             val project = projects[selected]
+                            var activeClip by remember(selected) { mutableIntStateOf(project.clips.indexOfFirst { it.track == 0 }.coerceAtLeast(0)) }
+                            var playheadMs by remember(selected) { mutableLongStateOf(0L) }
+                            val currentClip = project.clips.getOrNull(activeClip)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(project.name, style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -369,9 +372,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
-                            var activeClip by remember(selected) { mutableIntStateOf(project.clips.indexOfFirst { it.track == 0 }.coerceAtLeast(0)) }
-                            var playheadMs by remember(selected) { mutableLongStateOf(0L) }
-                            val currentClip = project.clips.getOrNull(activeClip)
                             var previewStart = 0L
                             val previewIndex = project.clips.indices.firstOrNull { i ->
                                 if (project.clips[i].track != 0) false else {
