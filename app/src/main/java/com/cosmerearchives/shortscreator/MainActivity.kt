@@ -64,7 +64,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f)
 data class LibraryMedia(val uri: String, val kind: String, val startMs: Long, val endMs: Long)
 private fun readLibrary(context: android.content.Context): List<LibraryMedia> = try {
     val data = JSONArray(context.getSharedPreferences("media_library", android.content.Context.MODE_PRIVATE).getString("items", "[]"))
@@ -849,7 +849,7 @@ class MainActivity : ComponentActivity() {
                                 Triple("Transitions", Icons.Default.Animation, false),
                                 Triple("Delete", Icons.Default.DeleteOutline, true),
                                 Triple("Duplicate", Icons.Default.ContentCopy, true),
-                                Triple("Speed", Icons.Default.Speed, false),
+                                Triple("Speed", Icons.Default.Speed, true),
                                 Triple("Volume", Icons.Default.VolumeUp, true),
                                 Triple("Text", Icons.Default.TextFields, true),
                                 Triple("Media", Icons.Default.VideoLibrary, true)
@@ -863,12 +863,14 @@ class MainActivity : ComponentActivity() {
                                             enabled = implemented && (currentClip != null || name == "Text" || name == "Media") &&
                                                 (name != "Cut" || (currentClip?.kind == "video" && currentClip.endMs - currentClip.startMs > 200L)) &&
                                                 (name != "Filters" || (currentClip?.kind == "video" && currentClip.track == 0)) &&
-                                                (name != "Volume" || (currentClip?.track == 0 && currentClip.kind == "video")),
+                                                (name != "Volume" || (currentClip?.track == 0 && currentClip.kind == "video")) &&
+                                                (name != "Speed" || (currentClip?.track == 0 && currentClip.kind == "video")),
                                             modifier = Modifier.size(58.dp),
                                             onClick = {
                                                 when (name) {
                                                     "Filters" -> { adjustment = "Filters" }
                                                     "Volume" -> { adjustment = "Clip volume" }
+                                                    "Speed" -> { adjustment = "Clip speed" }
                                                     "Cut" -> {
                                                         val clip = currentClip
                                                         if (clip != null && clip.kind == "video") {
@@ -936,6 +938,25 @@ class MainActivity : ComponentActivity() {
                                             maxLines = 2, textAlign = TextAlign.Center)
                                     }
                                 }
+                            }
+                            if (adjustment == "Clip speed" && currentClip?.kind == "video" && currentClip.track == 0) {
+                                AlertDialog(onDismissRequest = { saveProjects(projects); adjustment = null },
+                                    title = { Text("Clip speed") },
+                                    text = { Column {
+                                        Text("${"%.2f".format(currentClip.clipSpeed)}× playback speed")
+                                        Slider(value = currentClip.clipSpeed.coerceIn(0.5f, 2f),
+                                            valueRange = 0.5f..2f,
+                                            onValueChange = { speed ->
+                                                val updated = projects.toMutableList()
+                                                val clips = project.clips.toMutableList()
+                                                clips[activeClip] = currentClip.copy(clipSpeed = speed)
+                                                updated[selected] = project.copy(clips = clips)
+                                                projects = updated
+                                            }, onValueChangeFinished = { saveProjects(projects) })
+                                        Text("Exported video and audio will use this speed. Faster clips become shorter.",
+                                            style = MaterialTheme.typography.bodySmall)
+                                    } },
+                                    confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
                             }
                             if (adjustment == "Clip volume" && currentClip?.kind == "video" && currentClip.track == 0) {
                                 AlertDialog(onDismissRequest = { saveProjects(projects); adjustment = null },
@@ -1743,7 +1764,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat())
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat(), c.optDouble("clipSpeed", 1.0).toFloat())
             }, obj.optString("id", "legacy-project-$i"))
         }
     }
@@ -1766,7 +1787,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble())) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble()).put("clipSpeed", c.clipSpeed.toDouble())) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("id", p.id).put("clips", clips))
         }
         val serialized = arr.toString()
