@@ -2,6 +2,8 @@ package com.cosmerearchives.shortscreator
 
 import android.content.ContentValues
 import android.media.MediaMetadataRetriever
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -36,6 +38,16 @@ import java.io.File
 
 /** v0.2: a single trimmed source video; not yet a multitrack composition. */
 object Exporter {
+    private fun grayscaleBitmap(source: Bitmap): Bitmap {
+        val result = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
+        }
+        Canvas(result).drawBitmap(source, 0f, 0f, paint)
+        source.recycle()
+        return result
+    }
+
     fun exportTimeline(context: Context, clips: List<Clip>, ratio: String, callback: (String) -> Unit) {
         val (outputWidth, outputHeight) = exportDimensions(ratio)
         val presentation = Presentation.createForWidthAndHeight(outputWidth, outputHeight, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)
@@ -69,13 +81,19 @@ object Exporter {
             val bitmap = context.contentResolver.openInputStream(Uri.parse(item.uri))?.use {
                 BitmapFactory.decodeStream(it)
             } ?: error("Unable to open overlay image")
-            item to bitmap
+            item to if (item.videoFilter == "Grayscale") grayscaleBitmap(bitmap) else bitmap
         }
         val captions = visualOverlays.filter { it.kind == "text" && it.caption.isNotBlank() }.map { item ->
             val bitmap = Bitmap.createBitmap(1024, 192, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = item.textColor
+                color = if (item.videoFilter == "Grayscale") {
+                    val r = AndroidColor.red(item.textColor)
+                    val g = AndroidColor.green(item.textColor)
+                    val b = AndroidColor.blue(item.textColor)
+                    val gray = (0.299f * r + 0.587f * g + 0.114f * b).toInt().coerceIn(0, 255)
+                    AndroidColor.argb(AndroidColor.alpha(item.textColor), gray, gray, gray)
+                } else item.textColor
                 textSize = item.textSize
                 textAlign = Paint.Align.CENTER
                 setShadowLayer(5f, 2f, 3f, AndroidColor.BLACK)
