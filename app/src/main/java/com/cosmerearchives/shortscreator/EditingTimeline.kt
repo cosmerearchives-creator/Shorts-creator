@@ -113,8 +113,8 @@ fun EditingTimeline(
                 scrollPx = (scrollPx - distance).coerceIn(0f, maxScrollPx)
                 old - scrollPx
             }
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clipToBounds().scrollable(scrollState, Orientation.Horizontal)) {
-            Canvas(Modifier.fillMaxWidth().height(32.dp).clipToBounds().pointerInput(total, zoom) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clipToBounds()) {
+            Canvas(Modifier.fillMaxWidth().height(32.dp).clipToBounds().scrollable(scrollState, Orientation.Horizontal).pointerInput(total, zoom) {
                 detectTapGestures { tap -> onScrub(((tap.x + visibleScroll.value - leftPx) / pxPerMs).toLong().coerceIn(0, total)) }
             }) {
                 drawRect(timelineDark)
@@ -149,13 +149,12 @@ fun EditingTimeline(
                         val initialClip = moving?.let { clips[it] }
                         val edgeMs = (14.dp.toPx() / pxPerMs).toLong()
                         val offset = time - start
-                        val action = if (moving == null) 0 else when {
+                        val action = if (moving == null) 0 else if (initialClip?.kind == "text") 3 else when {
                             offset <= edgeMs -> 1
                             durations[moving] - offset <= edgeMs -> 2
                             else -> 3
                         }
                         var totalDx = 0f
-                        var previousDx = 0f
                         var currentStart = initialClip?.startMs ?: 0L
                         var currentEnd = initialClip?.endMs ?: 0L
                         var currentPosition = start
@@ -169,8 +168,7 @@ fun EditingTimeline(
                             if (moving != null) liveSelect.value(moving)
                             if (moving != null && initialClip != null) {
                                 fun update(dx: Float) {
-                                    val delta = ((dx - previousDx) / pxPerMs).toLong()
-                                    previousDx = dx
+                                    val delta = (dx / pxPerMs).toLong()
                                     if (delta == 0L) return
                                     when (action) {
                                         1 -> {
