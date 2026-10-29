@@ -1,2 +1,2 @@
-Release request: v0.79.0-alpha
-Build 80 - cross-media Cut/Trim and audio-track volume tools
+Release request: v0.80.0-alpha
+Build 81 - grayscale filters for images and text overlays
