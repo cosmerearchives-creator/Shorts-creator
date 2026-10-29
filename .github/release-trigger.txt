@@ -1,2 +1,2 @@
-Release request: v0.85.0-alpha
-Build 86 - export next to project title and simplify header
+Release request: v0.86.0-alpha
+Build 87 - purple section dividers and reduced editor gaps
