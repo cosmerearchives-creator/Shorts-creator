@@ -560,7 +560,13 @@ class MainActivity : ComponentActivity() {
                                             "text" -> {
                                                 val x = ((overlay.textX + 1f) / 2f * previewSize.width).toInt()
                                                 val y = ((1f - overlay.textY) / 2f * previewSize.height).toInt()
-                                                Text(overlay.caption, color = Color(overlay.textColor),
+                                                Text(overlay.caption, color = if (overlay.videoFilter == "Grayscale") {
+                                                    val red = android.graphics.Color.red(overlay.textColor)
+                                                    val green = android.graphics.Color.green(overlay.textColor)
+                                                    val blue = android.graphics.Color.blue(overlay.textColor)
+                                                    val gray = (0.299f * red + 0.587f * green + 0.114f * blue).toInt().coerceIn(0, 255)
+                                                    Color(android.graphics.Color.argb(android.graphics.Color.alpha(overlay.textColor), gray, gray, gray))
+                                                } else Color(overlay.textColor),
                                                     fontSize = (overlay.textSize * 0.42f).sp,
                                                     textAlign = TextAlign.Center,
                                                     modifier = Modifier.align(Alignment.TopStart)
@@ -597,6 +603,10 @@ class MainActivity : ComponentActivity() {
                                                     val dx = (overlay.imageX * previewSize.width / 2f).toInt()
                                                     val dy = (-overlay.imageY * previewSize.height / 2f).toInt()
                                                     Image(previewBitmap, "Image overlay",
+                                                        colorFilter = if (overlay.videoFilter == "Grayscale")
+                                                            androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                                                androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) })
+                                                        else null,
                                                         modifier = Modifier.align(Alignment.Center)
                                                             .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
                                                             .fillMaxWidth((0.7f * overlay.imageScale).coerceIn(0.1f, 1f)).height((150f * overlay.imageScale).dp)
@@ -723,7 +733,13 @@ class MainActivity : ComponentActivity() {
                                             "text" -> {
                                                 val x = ((overlay.textX + 1f) / 2f * previewSize.width).toInt()
                                                 val y = ((1f - overlay.textY) / 2f * previewSize.height).toInt()
-                                                Text(overlay.caption, color = Color(overlay.textColor),
+                                                Text(overlay.caption, color = if (overlay.videoFilter == "Grayscale") {
+                                                    val red = android.graphics.Color.red(overlay.textColor)
+                                                    val green = android.graphics.Color.green(overlay.textColor)
+                                                    val blue = android.graphics.Color.blue(overlay.textColor)
+                                                    val gray = (0.299f * red + 0.587f * green + 0.114f * blue).toInt().coerceIn(0, 255)
+                                                    Color(android.graphics.Color.argb(android.graphics.Color.alpha(overlay.textColor), gray, gray, gray))
+                                                } else Color(overlay.textColor),
                                                     fontSize = (overlay.textSize * 0.42f).sp,
                                                     textAlign = TextAlign.Center,
                                                     modifier = Modifier.align(Alignment.TopStart)
@@ -760,6 +776,10 @@ class MainActivity : ComponentActivity() {
                                                     val dx = (overlay.imageX * previewSize.width / 2f).toInt()
                                                     val dy = (-overlay.imageY * previewSize.height / 2f).toInt()
                                                     Image(previewBitmap, "Image overlay",
+                                                        colorFilter = if (overlay.videoFilter == "Grayscale")
+                                                            androidx.compose.ui.graphics.ColorFilter.colorMatrix(
+                                                                androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) })
+                                                        else null,
                                                         modifier = Modifier.align(Alignment.Center)
                                                             .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
                                                             .fillMaxWidth((0.7f * overlay.imageScale).coerceIn(0.1f, 1f)).height((150f * overlay.imageScale).dp)
