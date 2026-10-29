@@ -939,10 +939,30 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.height(8.dp))
                             if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs) {
                                 val duration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
-                                if (duration > 0) {
-                                    Text("Trim selected clip", fontWeight = FontWeight.SemiBold)
-                                    Text("Start: ${currentClip.startMs / 1000.0}s · End: ${currentClip.endMs / 1000.0}s", style = MaterialTheme.typography.bodySmall)
-                                    Text("In point", style = MaterialTheme.typography.labelSmall)
+                                if (duration > 0L) {
+                                    Text("Trim: ${"%.2f".format(currentClip.startMs / 1000f)}s – ${"%.2f".format(currentClip.endMs / 1000f)}s",
+                                        style = MaterialTheme.typography.bodySmall)
+                                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        listOf(
+                                            Triple("In point", "${"%.2f".format(currentClip.startMs / 1000f)}s", Icons.Default.FirstPage),
+                                            Triple("Out point", "${"%.2f".format(currentClip.endMs / 1000f)}s", Icons.Default.LastPage),
+                                            Triple("Trim range", "${"%.2f".format((currentClip.endMs-currentClip.startMs) / 1000f)}s", Icons.Default.ContentCut)
+                                        ).forEach { (name, value, picture) ->
+                                            Column(Modifier.width(88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                FilledTonalIconButton(onClick = { adjustment = name }, modifier = Modifier.size(56.dp)) {
+                                                    Icon(picture, name, tint = purple)
+                                                }
+                                                Text(name, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                                Text(value, style = MaterialTheme.typography.labelSmall, maxLines = 1,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                    }
+                                    if (adjustment == "In point") AlertDialog(
+                                        onDismissRequest = { saveProjects(projects); adjustment = null },
+                                        title = { Text("In point") },
+                                        text = { Column {                                     Text("In point", style = MaterialTheme.typography.labelSmall)
                                     Slider(
                                         value = currentClip.startMs.toFloat(),
                                         onValueChange = { value ->
@@ -955,7 +975,13 @@ class MainActivity : ComponentActivity() {
                                         onValueChangeFinished = { saveProjects(projects) },
                                         valueRange = 0f..(currentClip.endMs - 100L).coerceAtLeast(1L).toFloat()
                                     )
-                                    Text("Out point", style = MaterialTheme.typography.labelSmall)
+ } },
+                                        confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } }
+                                    )
+                                    if (adjustment == "Out point") AlertDialog(
+                                        onDismissRequest = { saveProjects(projects); adjustment = null },
+                                        title = { Text("Out point") },
+                                        text = { Column {                                     Text("Out point", style = MaterialTheme.typography.labelSmall)
                                     Slider(
                                         value = currentClip.endMs.toFloat(),
                                         onValueChange = { value ->
@@ -968,6 +994,10 @@ class MainActivity : ComponentActivity() {
                                         onValueChangeFinished = { saveProjects(projects) },
                                         valueRange = (currentClip.startMs + 100L).toFloat()..duration.toFloat()
                                     )
+ } },
+                                        confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } }
+                                    )
+
                                     Button(onClick = {
                                         exportStatus = "Exporting selected clip…"
                                         try {
@@ -977,6 +1007,7 @@ class MainActivity : ComponentActivity() {
                                         } catch (e: Exception) { exportStatus = "Export failed: ${e.message}" }
                                     }) { Text("Export selected clip") }
                                     if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
+
                                 }
                             }
                             Spacer(Modifier.height(12.dp))
@@ -995,9 +1026,13 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) { Text("Export complete timeline") }
                             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
-                            if (currentClip != null && (currentClip.kind == "video" || currentClip.kind == "audio") && currentClip.endMs > currentClip.startMs) {
+                            if (currentClip != null && (currentClip.kind == "video" || currentClip.kind == "audio") &&
+                                currentClip.endMs > currentClip.startMs && adjustment == "Trim range") {
                                 val sourceDuration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
                                 if (sourceDuration > 100L) {
+                                    AlertDialog(onDismissRequest = { saveProjects(projects); adjustment = null },
+                                        title = { Text("Trim range") },
+                                        text = { Column {
                                     Text("Timeline clip trim · ${(currentClip.endMs - currentClip.startMs) / 1000.0}s selected",
                                         fontWeight = FontWeight.SemiBold)
                                     TimelineMediaStrip(currentClip.uri, currentClip.kind, sourceDuration,
@@ -1058,6 +1093,9 @@ class MainActivity : ComponentActivity() {
                                             saveProjects(updated)
                                         }) { Text("Out +") }
                                     }
+
+                                        } },
+                                        confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
                                 }
                             }
                             if (currentClip?.kind == "text" && currentClip.track == 1) {
