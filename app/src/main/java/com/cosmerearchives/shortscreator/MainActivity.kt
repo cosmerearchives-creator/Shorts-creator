@@ -119,6 +119,7 @@ class MainActivity : ComponentActivity() {
             val libraryScope = rememberCoroutineScope()
             var newDialog by remember { mutableStateOf(false) }
             var showSettings by remember { mutableStateOf(false) }
+            var sortProjectsByName by remember { mutableStateOf(false) }
             var showDevNotes by remember { mutableStateOf(false) }
             var selectedTrack by remember { mutableIntStateOf(0) }
             var updateStatus by remember { mutableStateOf("") }
@@ -185,6 +186,7 @@ class MainActivity : ComponentActivity() {
                             }
                             Text("Storm Vision", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             TextButton(onClick = { sharedLibrary = true; showLibrary = true; showSettings = false }) { Text("Media Library") }
+                            TextButton(onClick = { sortProjectsByName = !sortProjectsByName }) { Text(if (sortProjectsByName) "A–Z" else "Sort") }
                             IconButton(onClick = { showSettings = !showSettings; selected = -1 }) { Icon(Icons.Default.Settings, "Settings") }
                         }
                         Spacer(Modifier.height(12.dp))
@@ -256,7 +258,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             Spacer(Modifier.height(12.dp))
-                            projects.indices.chunked(2).forEach { pair ->
+                            (if (sortProjectsByName) projects.indices.sortedBy { projects[it].name.lowercase() } else projects.indices.toList()).chunked(2).forEach { pair ->
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     pair.forEach { index ->
                                         val item = projects[index]
@@ -924,6 +926,8 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.height(10.dp))
                             Text("Tools", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             val toolItems = listOf(
+                                Triple("Move left", Icons.Default.ArrowBack, true),
+                                Triple("Move right", Icons.Default.ArrowForward, true),
                                 Triple("Cut", Icons.Default.ContentCut, true),
                                 Triple("Trim", Icons.Default.Tune, true),
                                 Triple("Filters", Icons.Default.Tune, true),
@@ -942,6 +946,7 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.width(78.dp)) {
                                         FilledTonalIconButton(
                                             enabled = implemented && (currentClip != null || name == "Text" || name == "Media") &&
+                                                (name !in listOf("Move left", "Move right") || (currentClip?.track == 0 && project.clips.count { it.track == 0 } > 1)) &&
                                                 (name != "Cut" || (currentClip != null && currentClip.endMs - currentClip.startMs > 200L)) &&
                                                 (name != "Trim" || (currentClip != null && currentClip.endMs > currentClip.startMs)) &&
                                                 (name != "Filters" || (currentClip?.kind == "image" || currentClip?.kind == "text" || currentClip?.kind == "video" && currentClip.track == 0)) &&
@@ -951,6 +956,22 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.size(58.dp),
                                             onClick = {
                                                 when (name) {
+                                                    "Move left", "Move right" -> {
+                                                        val mainIndices = project.clips.indices.filter { project.clips[it].track == 0 }
+                                                        val place = mainIndices.indexOf(activeClip)
+                                                        val destination = if (name == "Move left") place - 1 else place + 1
+                                                        if (place >= 0 && destination in mainIndices.indices) {
+                                                            val cs = project.clips.toMutableList()
+                                                            val item = cs.removeAt(activeClip)
+                                                            val target = mainIndices[destination]
+                                                            cs.add(target, item)
+                                                            val updated = projects.toMutableList()
+                                                            updated[selected] = project.copy(clips = cs)
+                                                            projects = updated
+                                                            activeClip = target
+                                                            saveProjects(updated)
+                                                        }
+                                                    }
                                                     "Trim" -> { adjustment = "Trim" }
                                                     "Filters" -> { adjustment = "Filters" }
                                                     "Transitions" -> { adjustment = "Transitions" }
@@ -1581,55 +1602,6 @@ class MainActivity : ComponentActivity() {
 
                                         } },
                                         confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
-                                }
-                            }
-                            if (currentClip != null) {
-                                val durations = project.clips.map { (it.endMs - it.startMs).coerceAtLeast(0L) }
-                                val clipStart = if (currentClip.track == 0) project.clips.indices
-                                    .filter { it < activeClip && project.clips[it].track == 0 }.sumOf { durations[it] }
-                                    else currentClip.positionMs
-                                val splitOffset = playheadMs - clipStart
-                                val canSplit = currentClip.kind == "video" && splitOffset >= 100L &&
-                                    splitOffset <= durations[activeClip] - 100L
-                                Button(enabled = canSplit, onClick = {
-                                    val cut = currentClip.startMs + splitOffset
-                                    val cs = project.clips.toMutableList()
-                                    cs[activeClip] = currentClip.copy(endMs = cut)
-                                    cs.add(activeClip + 1, currentClip.copy(startMs = cut,
-                                        positionMs = if (currentClip.track == 0) 0L else playheadMs))
-                                    val updated = projects.toMutableList()
-                                    updated[selected] = project.copy(clips = cs)
-                                    projects = updated
-                                    saveProjects(updated)
-                                    activeClip += 1
-                                }) { Text("Split at playhead") }
-                                if (currentClip.track == 0) {
-                                    val mainIndices = project.clips.indices.filter { project.clips[it].track == 0 }
-                                    val place = mainIndices.indexOf(activeClip)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(enabled = place > 0, onClick = {
-                                            val cs = project.clips.toMutableList()
-                                            val previous = mainIndices[place - 1]
-                                            val item = cs.removeAt(activeClip)
-                                            cs.add(previous, item)
-                                            val updated = projects.toMutableList()
-                                            updated[selected] = project.copy(clips = cs)
-                                            projects = updated
-                                            saveProjects(updated)
-                                            activeClip = previous
-                                        }) { Text("Move left") }
-                                        OutlinedButton(enabled = place >= 0 && place < mainIndices.lastIndex, onClick = {
-                                            val cs = project.clips.toMutableList()
-                                            val next = mainIndices[place + 1]
-                                            val item = cs.removeAt(activeClip)
-                                            cs.add(next, item)
-                                            val updated = projects.toMutableList()
-                                            updated[selected] = project.copy(clips = cs)
-                                            projects = updated
-                                            saveProjects(updated)
-                                            activeClip = next
-                                        }) { Text("Move right") }
-                                    }
                                 }
                             }
                             Spacer(Modifier.height(48.dp))
