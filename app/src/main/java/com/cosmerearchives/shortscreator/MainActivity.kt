@@ -499,6 +499,154 @@ class MainActivity : ComponentActivity() {
                                 "16:9" -> 16f / 9f
                                 else -> 9f / 16f
                             }
+                            if (project.ratio == "9:16") {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(if (project.ratio == "9:16") 138.dp else 0.dp).then(if (project.ratio == "9:16") Modifier else Modifier.fillMaxWidth()).aspectRatio(previewRatio).background(dark, RoundedCornerShape(16.dp))
+                                .onSizeChanged { previewSize = it }) {
+                                if (previewClip != null && previewClip.kind == "video") {
+                                    AndroidView(
+                                        factory = { ctx -> PlayerView(ctx).apply {
+                                            player = previewPlayer
+                                            useController = false
+                                            setKeepContentOnPlayerReset(true)
+                                        } },
+                                        update = { view -> view.player = previewPlayer },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else if (previewClip?.kind == "audio") {
+                                    EqualizerPreview(playheadMs - previewStart, Modifier.fillMaxSize())
+                                } else {
+                                    if (project.clips.none { it.track == 1 }) {
+                                        Text("Add media or text to preview", color = Color.White,
+                                            modifier = Modifier.align(Alignment.Center))
+                                    }
+                                }
+                                project.clips.forEachIndexed { clipIndex, overlay ->
+                                    if (overlay.track == 1 &&
+                                        playheadMs >= overlay.positionMs &&
+                                        playheadMs < overlay.positionMs + (overlay.endMs - overlay.startMs).coerceAtLeast(0L)) {
+                                        when (overlay.kind) {
+                                            "text" -> {
+                                                val x = ((overlay.textX + 1f) / 2f * previewSize.width).toInt()
+                                                val y = ((1f - overlay.textY) / 2f * previewSize.height).toInt()
+                                                Text(overlay.caption, color = Color(overlay.textColor),
+                                                    fontSize = (overlay.textSize * 0.42f).sp,
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier.align(Alignment.TopStart)
+                                                        .offset { androidx.compose.ui.unit.IntOffset(x - previewSize.width / 4, y - 24) }
+                                                        .width(180.dp)
+                                                        .pointerInput(clipIndex, previewSize) {
+                                                            detectDragGestures { change, drag ->
+                                                                change.consume()
+                                                                if (previewSize.width > 0 && previewSize.height > 0) {
+                                                                    val cs = projects[selected].clips.toMutableList()
+                                                                    val item = cs.getOrNull(clipIndex)
+                                                                    if (item != null && item.kind == "text") {
+                                                                        cs[clipIndex] = item.copy(
+                                                                            textX = (item.textX + 2f * drag.x / previewSize.width).coerceIn(-0.85f, 0.85f),
+                                                                            textY = (item.textY - 2f * drag.y / previewSize.height).coerceIn(-0.85f, 0.85f))
+                                                                        val updated = projects.toMutableList()
+                                                                        updated[selected] = projects[selected].copy(clips = cs)
+                                                                        projects = updated
+                                                                        saveProjects(updated)
+                                                                    }
+                                                                }
+                                                            }
+                                                        })
+                                            }
+                                            "image" -> {
+                                                var bitmap by remember(overlay.uri) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                                                LaunchedEffect(overlay.uri) {
+                                                    bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                        previewImageCache.get(frameContext, Uri.parse(overlay.uri))
+                                                    }
+                                                }
+                                                val previewBitmap = bitmap
+                                                if (previewBitmap != null) {
+                                                    val dx = (overlay.imageX * previewSize.width / 2f).toInt()
+                                                    val dy = (-overlay.imageY * previewSize.height / 2f).toInt()
+                                                    Image(previewBitmap, "Image overlay",
+                                                        modifier = Modifier.align(Alignment.Center)
+                                                            .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
+                                                            .fillMaxWidth((0.7f * overlay.imageScale).coerceIn(0.1f, 1f)).height((150f * overlay.imageScale).dp)
+                                                            .pointerInput(clipIndex, previewSize) {
+                                                                detectTransformGestures { _, pan, zoom, _ ->
+                                                                    if (previewSize.width > 0 && previewSize.height > 0) {
+                                                                        val cs = projects[selected].clips.toMutableList()
+                                                                        val item = cs.getOrNull(clipIndex)
+                                                                        if (item != null && item.kind == "image") {
+                                                                            cs[clipIndex] = item.copy(
+                                                                                imageX = (item.imageX + 2f * pan.x / previewSize.width).coerceIn(-0.9f, 0.9f),
+                                                                                imageY = (item.imageY - 2f * pan.y / previewSize.height).coerceIn(-0.9f, 0.9f),
+                                                                                imageScale = (item.imageScale * zoom).coerceIn(0.2f, 2f))
+                                                                            val updated = projects.toMutableList()
+                                                                            updated[selected] = projects[selected].copy(clips = cs)
+                                                                            projects = updated
+                                                                            saveProjects(updated)
+                                                                        }
+                                                                    }
+                                                                }
+                                                            })
+                                                }
+                                            }
+                                            "video" -> {
+                                                val pipTime = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
+                                                val pipWidth = (previewSize.width * overlay.pipScale).toInt().coerceAtLeast(1)
+                                                val px = ((overlay.pipX + 1f) * previewSize.width / 2f - pipWidth / 2f).toInt()
+                                                val py = ((1f - overlay.pipY) * previewSize.height / 2f - 40).toInt()
+                                                key(overlay.uri, overlay.startMs, overlay.endMs) {
+                                                    Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(px, py) }
+                                                        .width(with(androidx.compose.ui.platform.LocalDensity.current) { pipWidth.toDp() })
+                                                        .height(85.dp)
+                                                        .pointerInput(clipIndex, previewSize) {
+                                                            detectDragGestures { change, drag ->
+                                                                change.consume()
+                                                                if (previewSize.width > 0 && previewSize.height > 0) {
+                                                                    val cs = projects[selected].clips.toMutableList()
+                                                                    val item = cs.getOrNull(clipIndex)
+                                                                    if (item != null && item.kind == "video") {
+                                                                        cs[clipIndex] = item.copy(
+                                                                            pipX = (item.pipX + 2f * drag.x / previewSize.width).coerceIn(-0.9f, 0.9f),
+                                                                            pipY = (item.pipY - 2f * drag.y / previewSize.height).coerceIn(-0.9f, 0.9f))
+                                                                        val updated = projects.toMutableList()
+                                                                        updated[selected] = projects[selected].copy(clips = cs)
+                                                                        projects = updated
+                                                                        saveProjects(updated)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }) {
+                                                        VideoPreview(overlay.uri, overlay.startMs, overlay.endMs, pipTime, Modifier.fillMaxSize())
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Column(Modifier.width(74.dp), verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                IconButton(enabled = timelineEndMs > 0L, onClick = {
+                                    previewPlaying = false
+                                    playheadMs = (playheadMs - 5000L).coerceAtLeast(0L)
+                                }) { Icon(Icons.Default.Replay5, "Back 5 seconds") }
+                                IconButton(enabled = timelineEndMs > 0L, onClick = {
+                                    previewPlaying = !previewPlaying
+                                }) { Icon(if (previewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    if (previewPlaying) "Pause" else "Play") }
+                                IconButton(enabled = timelineEndMs > 0L, onClick = {
+                                    previewPlaying = false
+                                    playheadMs = (playheadMs + 5000L).coerceAtMost(
+                                        timelineEndMs)
+                                }) { Icon(Icons.Default.Forward5, "Forward 5 seconds") }
+                                Text("${"%.1f".format(java.util.Locale.US, playheadMs / 1000.0)}s",
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+
+                                }
+                            } else {
                             Box(Modifier.fillMaxWidth().aspectRatio(previewRatio).background(dark, RoundedCornerShape(16.dp))
                                 .onSizeChanged { previewSize = it }) {
                                 if (previewClip != null && previewClip.kind == "video") {
@@ -622,6 +770,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(enabled = timelineEndMs > 0L, onClick = {
@@ -639,6 +788,8 @@ class MainActivity : ComponentActivity() {
                                 }) { Icon(Icons.Default.Forward5, "Forward 5 seconds") }
                                 Text("${"%.1f".format(java.util.Locale.US, playheadMs / 1000.0)}s",
                                     style = MaterialTheme.typography.bodySmall)
+                            }
+
                             }
                             Spacer(Modifier.height(10.dp))
                             HorizontalDivider(color = Color(0xFFE7DFF0))
