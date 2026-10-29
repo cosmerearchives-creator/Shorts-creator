@@ -1,2 +1,2 @@
-Release request: v0.80.0-alpha
-Build 81 - grayscale filters for images and text overlays
+Release request: v0.81.0-alpha
+Build 82 - live grayscale image and text overlay preview
