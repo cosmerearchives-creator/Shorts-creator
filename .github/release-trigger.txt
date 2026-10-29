@@ -1,2 +1,2 @@
-Release request: v0.76.0-alpha
-Build 77 - offline fade-through-black video transitions
+Release request: v0.77.0-alpha
+Build 78 - grayscale and fade-through-black in-editor preview
