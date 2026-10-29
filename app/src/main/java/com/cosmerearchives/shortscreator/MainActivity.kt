@@ -495,8 +495,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             // Text-linked speech follows the main transport and the overlay's position.
-                            val speechOverlays = project.clips.filter {
-                                it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank()
+                            val speechOverlays = remember(project.clips) {
+                                project.clips.filter {
+                                    it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank()
+                                }
                             }
                             val speechPlayers = remember(project.id, speechOverlays.map { it.ttsUri }) {
                                 speechOverlays.associate { clip ->
@@ -509,7 +511,7 @@ class MainActivity : ComponentActivity() {
                             DisposableEffect(speechPlayers) {
                                 onDispose { speechPlayers.values.forEach { it.release() } }
                             }
-                            LaunchedEffect(speechPlayers, previewPlaying, playheadMs) {
+                            LaunchedEffect(speechPlayers, previewPlaying, playheadMs / 100L) {
                                 speechOverlays.forEach { textClip ->
                                     val speechPlayer = speechPlayers[textClip.ttsUri] ?: return@forEach
                                     val relative = playheadMs - textClip.positionMs
@@ -2625,7 +2627,7 @@ private class PreviewImageCache {
             context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
             var sample = 1
-            while (bounds.outWidth / sample > 1080 || bounds.outHeight / sample > 1080) sample *= 2
+            while (bounds.outWidth / sample > 720 || bounds.outHeight / sample > 720) sample *= 2
             val options = BitmapFactory.Options().apply {
                 inSampleSize = sample
                 inPreferredConfig = Bitmap.Config.ARGB_8888
