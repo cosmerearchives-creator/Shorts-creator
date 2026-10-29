@@ -185,8 +185,6 @@ class MainActivity : ComponentActivity() {
                                 IconButton(onClick = { selected = -1; showSettings = false }) { Icon(Icons.Default.ArrowBack, "Back") }
                             }
                             Text("Storm Vision", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { sharedLibrary = true; showLibrary = true; showSettings = false }) { Text("Media Library") }
-                            TextButton(onClick = { sortProjectsByName = !sortProjectsByName }) { Text(if (sortProjectsByName) "A–Z" else "Sort") }
                             IconButton(onClick = { showSettings = !showSettings; selected = -1 }) { Icon(Icons.Default.Settings, "Settings") }
                         }
                         Spacer(Modifier.height(12.dp))
@@ -361,6 +359,19 @@ class MainActivity : ComponentActivity() {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(project.name, style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            IconButton(
+                                enabled = (project.clips.none { it.track == 0 } && project.clips.any { it.track == 1 }) ||
+                                    (project.clips.any { it.track == 0 } &&
+                                        project.clips.filter { it.track == 0 }.all { it.kind == "video" && it.endMs > it.startMs }),
+                                onClick = {
+                                    exportStatus = "Preparing timeline export…"
+                                    try {
+                                        Exporter.exportTimeline(this@MainActivity, project.clips, project.ratio) { status ->
+                                            runOnUiThread { exportStatus = status }
+                                        }
+                                    } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
+                                }
+                            ) { Icon(Icons.Default.FileUpload, "Export to library") }
                             Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
                                 IconButton(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.VideoLibrary, "Media library") }
                                 IconButton(onClick = {
@@ -1249,20 +1260,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             Spacer(Modifier.height(12.dp))
-                            val mainClips = project.clips.filter { it.track == 0 }
-                            val overlayClips = project.clips.filter { it.track == 1 }
-                            val unsupportedOverlays = overlayClips.any { it.kind != "image" }
-                            Button(
-                                enabled = (mainClips.isEmpty() && overlayClips.isNotEmpty()) || (mainClips.isNotEmpty() && mainClips.all { it.kind == "video" && it.endMs > it.startMs }),
-                                onClick = {
-                                    exportStatus = "Preparing timeline export…"
-                                    try {
-                                        Exporter.exportTimeline(this@MainActivity, project.clips, project.ratio) { status ->
-                                            runOnUiThread { exportStatus = status }
-                                        }
-                                    } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
-                                }
-                            ) { Text("Export complete timeline") }
                             if (exportStatus.isNotBlank()) Text(exportStatus, style = MaterialTheme.typography.bodySmall)
                             if (currentClip != null && (currentClip.kind == "video" || currentClip.kind == "audio") &&
                                 currentClip.endMs > currentClip.startMs && adjustment == "Trim range") {
