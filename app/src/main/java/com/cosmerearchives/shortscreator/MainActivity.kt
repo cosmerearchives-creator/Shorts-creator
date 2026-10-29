@@ -67,6 +67,10 @@ private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
 data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f, val transition: String = "None", val fadeDurationMs: Long = 400L)
+/** Duration in final timeline after offline speed processing. */
+fun Clip.timelineDurationMs(): Long = ((endMs - startMs).coerceAtLeast(0L) /
+    (if (kind == "video" || kind == "audio") clipSpeed.coerceIn(0.5f, 2f) else 1f)).toLong()
+
 data class LibraryMedia(val uri: String, val kind: String, val startMs: Long, val endMs: Long)
 private fun readLibrary(context: android.content.Context): List<LibraryMedia> = try {
     val data = JSONArray(context.getSharedPreferences("media_library", android.content.Context.MODE_PRIVATE).getString("items", "[]"))
@@ -397,7 +401,7 @@ class MainActivity : ComponentActivity() {
                             var previewStart = 0L
                             val previewIndex = project.clips.indices.firstOrNull { i ->
                                 if (project.clips[i].track != 0) false else {
-                                    val span = ((project.clips[i].endMs - project.clips[i].startMs).coerceAtLeast(0L) / project.clips[i].clipSpeed.coerceIn(0.5f, 2f)).toLong()
+                                    val span = project.clips[i].timelineDurationMs()
                                     val inside = playheadMs >= previewStart && playheadMs < previewStart + span
                                     if (!inside) previewStart += span
                                     inside
@@ -405,8 +409,8 @@ class MainActivity : ComponentActivity() {
                             }
                             val previewClip = previewIndex?.let { project.clips[it] }
                             val timelineEndMs = maxOf(
-                                project.clips.filter { it.track == 0 }.sumOf { ((it.endMs - it.startMs).coerceAtLeast(0L) / it.clipSpeed.coerceIn(0.5f, 2f)).toLong() },
-                                project.clips.filter { it.track != 0 }.maxOfOrNull { it.positionMs + (it.endMs - it.startMs).coerceAtLeast(0L) } ?: 0L
+                                project.clips.filter { it.track == 0 }.sumOf { it.timelineDurationMs() },
+                                project.clips.filter { it.track != 0 }.maxOfOrNull { it.positionMs + it.timelineDurationMs() } ?: 0L
                             )
                             var previewPlaying by remember(selected) { mutableStateOf(false) }
                             val previewPlayer = remember(previewClip?.uri, previewClip?.startMs, previewClip?.endMs) {
@@ -557,8 +561,7 @@ class MainActivity : ComponentActivity() {
                                 val mainVideoClips = project.clips.filter { it.track == 0 && it.kind == "video" }
                                 val activeMainIndex = mainVideoClips.indexOfFirst { it === previewClip }
                                 if (previewClip?.kind == "video" && activeMainIndex >= 0) {
-                                    val duration = ((previewClip.endMs - previewClip.startMs).coerceAtLeast(0L) /
-                                        previewClip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
+                                    val duration = previewClip.timelineDurationMs()
                                     val elapsed = (playheadMs - previewStart).coerceIn(0L, duration)
                                     val fadeLength = minOf(400L, duration / 3).coerceAtLeast(1L)
                                     val fadeIn = if (activeMainIndex > 0 && previewClip.transition == "Fade through black")
@@ -574,13 +577,13 @@ class MainActivity : ComponentActivity() {
                                 project.clips.forEachIndexed { clipIndex, overlay ->
                                     val overlayFade = if (overlay.transition == "Fade in/out") {
                                         val elapsed = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
-                                        val length = (overlay.endMs - overlay.startMs).coerceAtLeast(1L)
+                                        val length = overlay.timelineDurationMs().coerceAtLeast(1L)
                                         val fade = minOf(overlay.fadeDurationMs.coerceIn(100L, 3000L), length / 3).coerceAtLeast(1L)
                                         minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
                                     } else 1f
                                     if (overlay.track == 1 &&
                                         playheadMs >= overlay.positionMs &&
-                                        playheadMs < overlay.positionMs + (overlay.endMs - overlay.startMs).coerceAtLeast(0L)) {
+                                        playheadMs < overlay.positionMs + overlay.timelineDurationMs()) {
                                         when (overlay.kind) {
                                             "text" -> {
                                                 val x = ((overlay.textX + 1f) / 2f * previewSize.width).toInt()
