@@ -189,6 +189,10 @@ class MainActivity : ComponentActivity() {
                         Spacer(Modifier.height(12.dp))
                         if (showSettings) {
                             Text("Settings", style = MaterialTheme.typography.titleLarge)
+                            Text("Version ${BuildConfig.VERSION_NAME} · Build ${BuildConfig.VERSION_CODE}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+
                             Spacer(Modifier.height(12.dp))
                             Button(onClick = {
                                 updateStatus = "Checking GitHub Releases…"
@@ -240,9 +244,6 @@ class MainActivity : ComponentActivity() {
                                     Icon(Icons.Default.Error, "Builder notes", tint = Color(0xFFC03936))
                                 }
                             }
-                            Text("Version ${BuildConfig.VERSION_NAME} · Build ${BuildConfig.VERSION_CODE}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(12.dp))
                             OutlinedButton(onClick = {
                                 bulkProjectMode = !bulkProjectMode
@@ -891,6 +892,7 @@ class MainActivity : ComponentActivity() {
                             Text("Tools", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             val toolItems = listOf(
                                 Triple("Cut", Icons.Default.ContentCut, true),
+                                Triple("Trim", Icons.Default.Tune, true),
                                 Triple("Filters", Icons.Default.Tune, true),
                                 Triple("Transitions", Icons.Default.Animation, true),
                                 Triple("Delete", Icons.Default.DeleteOutline, true),
@@ -908,6 +910,7 @@ class MainActivity : ComponentActivity() {
                                         FilledTonalIconButton(
                                             enabled = implemented && (currentClip != null || name == "Text" || name == "Media") &&
                                                 (name != "Cut" || (currentClip?.kind == "video" && currentClip.endMs - currentClip.startMs > 200L)) &&
+                                                (name != "Trim" || (currentClip?.kind == "video" && currentClip.endMs > currentClip.startMs)) &&
                                                 (name != "Filters" || (currentClip?.kind == "video" && currentClip.track == 0)) &&
                                                 (name != "Volume" || (currentClip?.track == 0 && currentClip.kind == "video")) &&
                                                 (name != "Speed" || (currentClip?.track == 0 && currentClip.kind == "video")) &&
@@ -915,6 +918,7 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.size(58.dp),
                                             onClick = {
                                                 when (name) {
+                                                    "Trim" -> { adjustment = "Trim" }
                                                     "Filters" -> { adjustment = "Filters" }
                                                     "Transitions" -> { adjustment = "Transitions" }
                                                     "Volume" -> { adjustment = "Clip volume" }
@@ -1074,7 +1078,7 @@ class MainActivity : ComponentActivity() {
                             Text("Selected clip", style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(8.dp))
-                            if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs) {
+                            if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs && adjustment == "Trim") {
                                 val duration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
                                 if (duration > 0L) {
                                     Text("Trim: ${"%.2f".format(currentClip.startMs / 1000f)}s – ${"%.2f".format(currentClip.endMs / 1000f)}s",
