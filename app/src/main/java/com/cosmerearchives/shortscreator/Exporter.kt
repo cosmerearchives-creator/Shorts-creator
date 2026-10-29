@@ -95,7 +95,7 @@ object Exporter {
             item to bitmap
         }
         var timelineStartMs = 0L
-        val edits = main.map { clip ->
+        val edits = main.mapIndexed { index, clip ->
             val segmentStart = timelineStartMs
             timelineStartMs += ((clip.endMs - clip.startMs) / clip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
             val media = if (overlayOnly) {
@@ -117,7 +117,27 @@ object Exporter {
                     }
                 }
             }
-            val effects = if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()
+            val fadeIn = !overlayOnly && index > 0 && clip.transition == "Fade through black"
+            val fadeOut = !overlayOnly && index < main.lastIndex && main[index + 1].transition == "Fade through black"
+            val fades = if (fadeIn || fadeOut) {
+                val black = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888).apply {
+                    eraseColor(AndroidColor.BLACK)
+                }
+                val durationUs = ((clip.endMs - clip.startMs) * 1000L / clip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
+                listOf(object : BitmapOverlay() {
+                    override fun getBitmap(presentationTimeUs: Long): Bitmap = black
+                    override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
+                        val fadeUs = minOf(400_000L, durationUs / 3).coerceAtLeast(1L)
+                        val incoming = if (fadeIn) (1f - presentationTimeUs.toFloat() / fadeUs).coerceIn(0f, 1f) else 0f
+                        val outgoing = if (fadeOut) (1f - (durationUs - presentationTimeUs).toFloat() / fadeUs).coerceIn(0f, 1f) else 0f
+                        return StaticOverlaySettings.Builder()
+                            .setAlphaScale(maxOf(incoming, outgoing))
+                            .build()
+                    }
+                })
+            } else emptyList()
+            val effects = (if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()) +
+                (if (fades.isNotEmpty()) listOf(OverlayEffect(fades)) else emptyList())
             EditedMediaItem.Builder(media).apply {
                 if (!overlayOnly && clip.clipSpeed != 1f) setSpeed(object : SpeedProvider {
                     override fun getSpeed(timeUs: Long): Float = clip.clipSpeed.coerceIn(0.5f, 2f)
