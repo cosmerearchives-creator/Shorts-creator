@@ -66,7 +66,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f, val transition: String = "None")
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f, val transition: String = "None", val fadeDurationMs: Long = 400L)
 data class LibraryMedia(val uri: String, val kind: String, val startMs: Long, val endMs: Long)
 private fun readLibrary(context: android.content.Context): List<LibraryMedia> = try {
     val data = JSONArray(context.getSharedPreferences("media_library", android.content.Context.MODE_PRIVATE).getString("items", "[]"))
@@ -557,7 +557,7 @@ class MainActivity : ComponentActivity() {
                                     val overlayFade = if (overlay.transition == "Fade in/out") {
                                         val elapsed = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
                                         val length = (overlay.endMs - overlay.startMs).coerceAtLeast(1L)
-                                        val fade = minOf(400L, length / 3).coerceAtLeast(1L)
+                                        val fade = minOf(overlay.fadeDurationMs.coerceIn(100L, 3000L), length / 3).coerceAtLeast(1L)
                                         minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
                                     } else 1f
                                     if (overlay.track == 1 &&
@@ -946,7 +946,7 @@ class MainActivity : ComponentActivity() {
                                                 (name != "Trim" || (currentClip != null && currentClip.endMs > currentClip.startMs)) &&
                                                 (name != "Filters" || (currentClip?.kind == "image" || currentClip?.kind == "text" || currentClip?.kind == "video" && currentClip.track == 0)) &&
                                                 (name != "Volume" || (currentClip?.kind == "audio" || currentClip?.kind == "video" && currentClip.track == 0)) &&
-                                                (name != "Speed" || (currentClip?.track == 0 && currentClip.kind == "video")) &&
+                                                (name != "Speed" || (currentClip?.kind == "audio" || currentClip?.track == 0 && currentClip.kind == "video")) &&
                                                 (name != "Transitions" || (currentClip?.track == 0 && currentClip.kind == "video" || currentClip?.track == 1 && currentClip.kind in listOf("image", "text"))),
                                             modifier = Modifier.size(58.dp),
                                             onClick = {
@@ -1051,7 +1051,7 @@ class MainActivity : ComponentActivity() {
                                     } },
                                     confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
                             }
-                            if (adjustment == "Clip speed" && currentClip?.kind == "video" && currentClip.track == 0) {
+                            if (adjustment == "Clip speed" && currentClip != null && (currentClip.kind == "audio" || currentClip.kind == "video" && currentClip.track == 0)) {
                                 AlertDialog(onDismissRequest = { saveProjects(projects); adjustment = null },
                                     title = { Text("Clip speed") },
                                     text = { Column {
@@ -1094,6 +1094,18 @@ class MainActivity : ComponentActivity() {
                                     title = { Text("Transition into clip") },
                                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text(if (currentClip.track == 1) "Fade this overlay in and out without covering the background." else "Choose how this clip enters from the previous one. The first clip has no incoming transition.")
+                                        if (currentClip.track == 1 && currentClip.transition == "Fade in/out") {
+                                            Text("Fade duration: ${currentClip.fadeDurationMs} ms")
+                                            Slider(value = currentClip.fadeDurationMs.coerceIn(100L, 3000L).toFloat(),
+                                                valueRange = 100f..3000f,
+                                                onValueChange = { ms ->
+                                                    val cs = project.clips.toMutableList()
+                                                    cs[activeClip] = currentClip.copy(fadeDurationMs = ms.toLong())
+                                                    val updated = projects.toMutableList()
+                                                    updated[selected] = project.copy(clips = cs)
+                                                    projects = updated
+                                                }, onValueChangeFinished = { saveProjects(projects) })
+                                        }
                                         (if (currentClip.track == 1) listOf("None", "Fade in/out") else listOf("None", "Fade through black")).forEach { option ->
                                             FilledTonalButton(onClick = {
                                                 val cs = project.clips.toMutableList()
@@ -1897,7 +1909,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat(), c.optDouble("clipSpeed", 1.0).toFloat(), c.optString("transition", "None"))
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat(), c.optDouble("clipSpeed", 1.0).toFloat(), c.optString("transition", "None"), c.optLong("fadeDurationMs", 400L))
             }, obj.optString("id", "legacy-project-$i"))
         }
     }
@@ -1920,7 +1932,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble()).put("clipSpeed", c.clipSpeed.toDouble()).put("transition", c.transition)) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble()).put("clipSpeed", c.clipSpeed.toDouble()).put("transition", c.transition).put("fadeDurationMs", c.fadeDurationMs)) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("id", p.id).put("clips", clips))
         }
         val serialized = arr.toString()
