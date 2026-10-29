@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Color as AndroidColor
+import androidx.media3.effect.RgbFilter
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlayEffect
@@ -114,7 +115,7 @@ object Exporter {
                 }
             }
             val effects = if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()
-            EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), listOf(presentation) + effects)).build()
+            EditedMediaItem.Builder(media).setEffects(Effects(emptyList(), listOf(presentation) + (if (clip.videoFilter == "Grayscale") listOf(RgbFilter.createGrayscaleFilter()) else emptyList()) + effects)).build()
         }
         val mainSequence = if (overlayOnly) EditedMediaItemSequence.withVideoFrom(edits)
             else EditedMediaItemSequence.withAudioAndVideoFrom(edits)
