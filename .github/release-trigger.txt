@@ -1,2 +1,2 @@
-Release request: v0.70.0-alpha
-Build 71 - horizontal text and speech adjustment tiles with slider/color popups
+Release request: v0.71.0-alpha
+Build 72 - video trim controls converted to horizontal adjustment tiles and popup editors
