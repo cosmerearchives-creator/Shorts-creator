@@ -165,7 +165,16 @@ object Exporter {
             val item = MediaItem.Builder().setUri(Uri.parse(clip.uri))
                 .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                     .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
-            builder.addItem(EditedMediaItem.Builder(item).build())
+            builder.addItem(EditedMediaItem.Builder(item).setEffects(Effects(
+                if (clip.clipVolume < 0.999f) listOf(
+                    ChannelMixingAudioProcessor().apply {
+                        for (channels in 1..6) {
+                            putChannelMixingMatrix(ChannelMixingMatrix.createForConstantPower(channels, channels)
+                                .scaleBy(clip.clipVolume.coerceIn(0f, 1f)))
+                        }
+                    }
+                ) else emptyList(), emptyList()
+            )).build())
             sequences.add(builder.build())
         }
         clips.filter { it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank() }.forEach { caption ->
