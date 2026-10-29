@@ -352,6 +352,7 @@ class MainActivity : ComponentActivity() {
                             var activeClip by remember(selected) { mutableIntStateOf(project.clips.indexOfFirst { it.track == 0 }.coerceAtLeast(0)) }
                             var playheadMs by remember(selected) { mutableLongStateOf(0L) }
                             val currentClip = project.clips.getOrNull(activeClip)
+                            var adjustment by remember(selected, activeClip) { mutableStateOf<String?>(null) }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(project.name, style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -1106,6 +1107,33 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }) { Text(if (speechGenerating) "Generating…" else "Generate text-to-speech") }
                                 if (speechGenerationStatus.isNotBlank()) Text(speechGenerationStatus, style = MaterialTheme.typography.bodySmall)
+                                Text("Adjustments", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                val adjustmentItems = listOf(
+                                    Triple("Volume", "${(currentClip.ttsVolume * 100).toInt()}%", Icons.Default.VolumeUp),
+                                    Triple("Pitch", "${"%.2f".format(currentClip.ttsPitch)}x", Icons.Default.GraphicEq),
+                                    Triple("Speed", "${"%.2f".format(currentClip.ttsSpeed)}x", Icons.Default.Speed),
+                                    Triple("Font size", "${currentClip.textSize.toInt()}", Icons.Default.FormatSize),
+                                    Triple("Color", "Choose", Icons.Default.Palette),
+                                    Triple("Text horizontal", "${"%.2f".format(currentClip.textX)}", Icons.Default.SwapHoriz),
+                                    Triple("Text vertical", "${"%.2f".format(currentClip.textY)}", Icons.Default.SwapVert),
+                                    Triple("Duration", "${"%.2f".format(currentClip.endMs / 1000f)}s", Icons.Default.Timer)
+                                )
+                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    adjustmentItems.forEach { (title, value, icon) ->
+                                        Column(Modifier.width(88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            FilledTonalIconButton(onClick = { adjustment = title }, modifier = Modifier.size(56.dp)) {
+                                                Icon(icon, title, tint = purple)
+                                            }
+                                            Text(title, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                            Text(value, style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                        }
+                                    }
+                                }
+                                if (adjustment == "Volume") {
+                                    AlertDialog(onDismissRequest = { adjustment = null }, title = { Text("Volume") },
+                                        text = { Column { 
                                 Text("Speech volume: ${(currentClip.ttsVolume * 100).toInt()}%")
                                 Slider(value = currentClip.ttsVolume.coerceIn(0f, 1f), valueRange = 0f..1f,
                                     onValueChange = { v ->
@@ -1115,6 +1143,11 @@ class MainActivity : ComponentActivity() {
                                         updated[selected] = project.copy(clips = cs)
                                         projects = updated
                                     }, onValueChangeFinished = { saveProjects(projects) })
+                                        } }, confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
+                                }
+                                if (adjustment == "Pitch") {
+                                    AlertDialog(onDismissRequest = { adjustment = null }, title = { Text("Pitch") },
+                                        text = { Column { 
                                 Text("Speech pitch: ${"%.2f".format(currentClip.ttsPitch)}x")
                                 Slider(value = currentClip.ttsPitch.coerceIn(0.5f, 2f), valueRange = 0.5f..2f,
                                     onValueChange = { v ->
@@ -1124,6 +1157,11 @@ class MainActivity : ComponentActivity() {
                                         updated[selected] = project.copy(clips = cs)
                                         projects = updated
                                     }, onValueChangeFinished = { saveProjects(projects) })
+                                        } }, confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
+                                }
+                                if (adjustment == "Speed") {
+                                    AlertDialog(onDismissRequest = { adjustment = null }, title = { Text("Speed") },
+                                        text = { Column { 
                                 Text("Speech speed: ${"%.2f".format(currentClip.ttsSpeed)}x")
                                 Slider(value = currentClip.ttsSpeed.coerceIn(0.5f, 2f), valueRange = 0.5f..2f,
                                     onValueChange = { v ->
@@ -1133,6 +1171,8 @@ class MainActivity : ComponentActivity() {
                                         updated[selected] = project.copy(clips = cs)
                                         projects = updated
                                     }, onValueChangeFinished = { saveProjects(projects) })
+                                        } }, confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
+                                }
                                 Text("Generate speech again to apply changed voice settings.",
                                     style = MaterialTheme.typography.bodySmall)
                                 val speechAttached = currentClip.ttsUri.isNotBlank()
@@ -1165,6 +1205,9 @@ class MainActivity : ComponentActivity() {
                                         Text(" Listen to speech")
                                     }
                                 }
+                                if (adjustment == "Font size") {
+                                    AlertDialog(onDismissRequest = { adjustment = null }, title = { Text("Font size") },
+                                        text = { Column { 
                                 Text("Font size")
                                 Slider(value = currentClip.textSize.coerceIn(24f, 110f), valueRange = 24f..110f,
                                     onValueChange = { v ->
@@ -1174,6 +1217,11 @@ class MainActivity : ComponentActivity() {
                                         updated[selected] = project.copy(clips = cs)
                                         projects = updated
                                     }, onValueChangeFinished = { saveProjects(projects) })
+                                        } }, confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
+                                }
+                                if (adjustment == "Color") {
+                                    AlertDialog(onDismissRequest = { adjustment = null }, title = { Text("Color") },
+                                        text = { Column { 
                                 Text("Text color")
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     listOf("White" to -1, "Black" to -16777216, "Yellow" to -256, "Purple" to -10066330).forEach { (label, value) ->
@@ -1187,9 +1235,10 @@ class MainActivity : ComponentActivity() {
                                         }) { Text(label) }
                                     }
                                 }
+                                        } }, confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
+                                }
                                 listOf("Text horizontal" to 0, "Text vertical" to 1).forEach { (label, axis) ->
-                                    Text(label)
-                                    Slider(value = if (axis == 0) currentClip.textX else currentClip.textY,
+                                    if (adjustment == label) AlertDialog(onDismissRequest = { adjustment = null }, title = { Text(label) }, text = { Column { Slider(value = if (axis == 0) currentClip.textX else currentClip.textY,
                                         valueRange = -0.85f..0.85f,
                                         onValueChange = { v ->
                                             val cs = project.clips.toMutableList()
@@ -1197,8 +1246,11 @@ class MainActivity : ComponentActivity() {
                                             val updated = projects.toMutableList()
                                             updated[selected] = project.copy(clips = cs)
                                             projects = updated
-                                        }, onValueChangeFinished = { saveProjects(projects) })
+                                        }, onValueChangeFinished = { saveProjects(projects) }) } }, confirmButton = { TextButton(onClick = { adjustment = null }) { Text("Done") } })
                                 }
+                                if (adjustment == "Duration") {
+                                    AlertDialog(onDismissRequest = { adjustment = null }, title = { Text("Duration") },
+                                        text = { Column { 
                                 Text("Caption duration: ${currentClip.endMs / 1000.0}s")
                                 Slider(value = currentClip.endMs.coerceIn(500L, 30000L).toFloat(),
                                     valueRange = 500f..30000f,
@@ -1209,6 +1261,8 @@ class MainActivity : ComponentActivity() {
                                         updated[selected] = project.copy(clips = cs)
                                         projects = updated
                                     }, onValueChangeFinished = { saveProjects(projects) })
+                                        } }, confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
+                                }
                             }
                             if (currentClip?.kind == "video" && currentClip.track == 1) {
                                 Text("PiP size: ${(currentClip.pipScale * 100).toInt()}%")
