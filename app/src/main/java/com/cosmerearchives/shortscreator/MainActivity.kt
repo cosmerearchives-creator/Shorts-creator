@@ -911,7 +911,7 @@ class MainActivity : ComponentActivity() {
                                             enabled = implemented && (currentClip != null || name == "Text" || name == "Media") &&
                                                 (name != "Cut" || (currentClip != null && currentClip.endMs - currentClip.startMs > 200L)) &&
                                                 (name != "Trim" || (currentClip != null && currentClip.endMs > currentClip.startMs)) &&
-                                                (name != "Filters" || (currentClip?.kind == "video" && currentClip.track == 0)) &&
+                                                (name != "Filters" || (currentClip?.kind == "image" || currentClip?.kind == "text" || currentClip?.kind == "video" && currentClip.track == 0)) &&
                                                 (name != "Volume" || (currentClip?.kind == "audio" || currentClip?.kind == "video" && currentClip.track == 0)) &&
                                                 (name != "Speed" || (currentClip?.track == 0 && currentClip.kind == "video")) &&
                                                 (name != "Transitions" || (currentClip?.track == 0 && currentClip.kind == "video")),
@@ -1077,12 +1077,12 @@ class MainActivity : ComponentActivity() {
                                     } },
                                     confirmButton = { TextButton(onClick = { adjustment = null }) { Text("Close") } })
                             }
-                            if (adjustment == "Filters" && currentClip?.kind == "video") {
+                            if (adjustment == "Filters" && currentClip != null && currentClip.kind in listOf("video", "image", "text")) {
                                 AlertDialog(onDismissRequest = { adjustment = null },
-                                    title = { Text("Video filters") },
+                                    title = { Text("Visual filters") },
                                     text = {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text("Select a filter for this video clip. Applied when exporting the timeline.")
+                                            Text("Choose a filter for the selected visual clip. Applied during timeline export.")
                                             listOf("None", "Grayscale").forEach { option ->
                                                 FilledTonalButton(onClick = {
                                                     val cs = project.clips.toMutableList()
