@@ -1,2 +1,2 @@
-Release request: v0.81.0-alpha
-Build 82 - live grayscale image and text overlay preview
+Release request: v0.82.0-alpha
+Build 83 - fade in/out for image and text overlays
