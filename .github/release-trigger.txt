@@ -1,2 +1,2 @@
-Release request: v0.72.0-alpha
-Build 73 - trim popups with visual retained range and live time feedback
+Release request: v0.73.0-alpha
+Build 74 - offline grayscale filter tool for video clips
