@@ -1116,7 +1116,8 @@ class MainActivity : ComponentActivity() {
                                     Triple("Color", "Choose", Icons.Default.Palette),
                                     Triple("Text horizontal", "${"%.2f".format(currentClip.textX)}", Icons.Default.SwapHoriz),
                                     Triple("Text vertical", "${"%.2f".format(currentClip.textY)}", Icons.Default.SwapVert),
-                                    Triple("Duration", "${"%.2f".format(currentClip.endMs / 1000f)}s", Icons.Default.Timer)
+                                    Triple("Duration", "${"%.2f".format(currentClip.endMs / 1000f)}s", Icons.Default.Timer),
+                                    Triple("Start time", "${"%.2f".format(currentClip.positionMs / 1000f)}s", Icons.Default.Schedule)
                                 )
                                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1299,6 +1300,16 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             if (currentClip != null && currentClip.track != 0) {
+                                if (currentClip.kind != "text") {
+                                    FilledTonalButton(onClick = { adjustment = "Start time" }) {
+                                        Icon(Icons.Default.Schedule, null)
+                                        Text(" Start time: ${"%.2f".format(currentClip.positionMs / 1000f)}s")
+                                    }
+                                }
+                                if (adjustment == "Start time") {
+                                    AlertDialog(onDismissRequest = { adjustment = null },
+                                        title = { Text("Start time") },
+                                        text = { Column {
                                 Text("Overlay position: ${currentClip.positionMs / 1000.0}s", style = MaterialTheme.typography.bodySmall)
                                 Slider(
                                     value = currentClip.positionMs.toFloat().coerceIn(0f, 60000f),
@@ -1312,6 +1323,10 @@ class MainActivity : ComponentActivity() {
                                     onValueChangeFinished = { saveProjects(projects) },
                                     valueRange = 0f..60000f
                                 )
+
+                                        } },
+                                        confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
+                                }
                             }
                             if (currentClip != null) {
                                 val durations = project.clips.map { (it.endMs - it.startMs).coerceAtLeast(0L) }
