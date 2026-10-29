@@ -97,7 +97,7 @@ object Exporter {
         var timelineStartMs = 0L
         val edits = main.map { clip ->
             val segmentStart = timelineStartMs
-            timelineStartMs += clip.endMs - clip.startMs
+            timelineStartMs += ((clip.endMs - clip.startMs) / clip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
             val media = if (overlayOnly) {
                 MediaItem.Builder().setUri(Uri.parse(clip.uri)).setImageDurationMs(durationMs).build()
             } else MediaItem.Builder().setUri(Uri.parse(clip.uri))
