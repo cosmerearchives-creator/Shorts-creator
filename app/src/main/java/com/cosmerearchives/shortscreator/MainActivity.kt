@@ -692,7 +692,7 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.height(10.dp))
                             Text("Tools", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             val toolItems = listOf(
-                                Triple("Cut", Icons.Default.ContentCut, true),
+                                Triple("Cut", Icons.Default.ContentCut, false),
                                 Triple("Filters", Icons.Default.Tune, false),
                                 Triple("Transitions", Icons.Default.Animation, false),
                                 Triple("Delete", Icons.Default.DeleteOutline, true),
@@ -732,7 +732,6 @@ class MainActivity : ComponentActivity() {
                                                         saveProjects(updated)
                                                     }
                                                     "Media" -> { selectedTrack = 0; sharedLibrary = false; showLibrary = true }
-                                                    "Cut" -> { /* Existing split control remains in selected-clip tools below. */ }
                                                 }
                                             }
                                         ) { Icon(picture, name, tint = purple) }
