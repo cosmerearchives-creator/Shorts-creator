@@ -1,2 +1,2 @@
-Release request: v0.68.0-alpha
-Build 69 - compact 9:16 canvas and adjacent vertical playback controls
+Release request: v0.69.0-alpha
+Build 70 - fix text overlay timeline dragging and clip gesture conflict
