@@ -1,2 +1,2 @@
-Release request: v0.77.0-alpha
-Build 78 - grayscale and fade-through-black in-editor preview
+Release request: v0.78.0-alpha
+Build 79 - version label in Settings and opt-in video Trim tool
