@@ -909,10 +909,10 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.width(78.dp)) {
                                         FilledTonalIconButton(
                                             enabled = implemented && (currentClip != null || name == "Text" || name == "Media") &&
-                                                (name != "Cut" || (currentClip?.kind == "video" && currentClip.endMs - currentClip.startMs > 200L)) &&
-                                                (name != "Trim" || (currentClip?.kind == "video" && currentClip.endMs > currentClip.startMs)) &&
+                                                (name != "Cut" || (currentClip != null && currentClip.endMs - currentClip.startMs > 200L)) &&
+                                                (name != "Trim" || (currentClip != null && currentClip.endMs > currentClip.startMs)) &&
                                                 (name != "Filters" || (currentClip?.kind == "video" && currentClip.track == 0)) &&
-                                                (name != "Volume" || (currentClip?.track == 0 && currentClip.kind == "video")) &&
+                                                (name != "Volume" || (currentClip?.kind == "audio" || currentClip?.kind == "video" && currentClip.track == 0)) &&
                                                 (name != "Speed" || (currentClip?.track == 0 && currentClip.kind == "video")) &&
                                                 (name != "Transitions" || (currentClip?.track == 0 && currentClip.kind == "video")),
                                             modifier = Modifier.size(58.dp),
@@ -925,7 +925,7 @@ class MainActivity : ComponentActivity() {
                                                     "Speed" -> { adjustment = "Clip speed" }
                                                     "Cut" -> {
                                                         val clip = currentClip
-                                                        if (clip != null && clip.kind == "video") {
+                                                        if (clip != null) {
                                                             val preceding = if (clip.track == 0) {
                                                                 project.clips.indices.filter { it < activeClip && project.clips[it].track == 0 }
                                                                     .sumOf { (project.clips[it].endMs - project.clips[it].startMs).coerceAtLeast(0L) }
@@ -991,6 +991,33 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                            if (adjustment == "Trim" && currentClip != null && currentClip.kind in listOf("image", "text")) {
+                                AlertDialog(onDismissRequest = { adjustment = null },
+                                    title = { Text("Clip duration and timing") },
+                                    text = { Column {
+                                        Text("Duration: ${"%.2f".format((currentClip.endMs-currentClip.startMs) / 1000f)}s")
+                                        Slider(value = (currentClip.endMs-currentClip.startMs).coerceIn(500L, 30000L).toFloat(),
+                                            valueRange = 500f..30000f, onValueChange = { value ->
+                                                val cs = project.clips.toMutableList()
+                                                cs[activeClip] = currentClip.copy(endMs = currentClip.startMs + value.toLong())
+                                                val updated = projects.toMutableList()
+                                                updated[selected] = project.copy(clips = cs)
+                                                projects = updated
+                                            }, onValueChangeFinished = { saveProjects(projects) })
+                                        if (currentClip.track != 0) {
+                                            Text("Timeline start: ${"%.2f".format(currentClip.positionMs / 1000f)}s")
+                                            Slider(value = currentClip.positionMs.coerceIn(0L, 60000L).toFloat(),
+                                                valueRange = 0f..60000f, onValueChange = { value ->
+                                                    val cs = project.clips.toMutableList()
+                                                    cs[activeClip] = currentClip.copy(positionMs = value.toLong())
+                                                    val updated = projects.toMutableList()
+                                                    updated[selected] = project.copy(clips = cs)
+                                                    projects = updated
+                                                }, onValueChangeFinished = { saveProjects(projects) })
+                                        }
+                                    } },
+                                    confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
+                            }
                             if (adjustment == "Clip speed" && currentClip?.kind == "video" && currentClip.track == 0) {
                                 AlertDialog(onDismissRequest = { saveProjects(projects); adjustment = null },
                                     title = { Text("Clip speed") },
@@ -1010,7 +1037,7 @@ class MainActivity : ComponentActivity() {
                                     } },
                                     confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
                             }
-                            if (adjustment == "Clip volume" && currentClip?.kind == "video" && currentClip.track == 0) {
+                            if (adjustment == "Clip volume" && currentClip != null && (currentClip.kind == "audio" || currentClip.kind == "video" && currentClip.track == 0)) {
                                 AlertDialog(onDismissRequest = { saveProjects(projects); adjustment = null },
                                     title = { Text("Clip volume") },
                                     text = { Column {
@@ -1078,7 +1105,7 @@ class MainActivity : ComponentActivity() {
                             Text("Selected clip", style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(8.dp))
-                            if (currentClip != null && currentClip.kind == "video" && currentClip.endMs > currentClip.startMs && adjustment in listOf("Trim", "In point", "Out point", "Trim range")) {
+                            if (currentClip != null && currentClip.kind in listOf("video", "audio") && currentClip.endMs > currentClip.startMs && adjustment in listOf("Trim", "In point", "Out point", "Trim range")) {
                                 val duration = remember(currentClip.uri) { getDuration(Uri.parse(currentClip.uri)) }
                                 if (duration > 0L) {
                                     Text("Trim: ${"%.2f".format(currentClip.startMs / 1000f)}s – ${"%.2f".format(currentClip.endMs / 1000f)}s",
