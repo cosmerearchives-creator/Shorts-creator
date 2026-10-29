@@ -352,6 +352,17 @@ class MainActivity : ComponentActivity() {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(project.name, style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                                IconButton(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.VideoLibrary, "Media library") }
+                                IconButton(onClick = {
+                                    val updated = projects.toMutableList()
+                                    val cs = project.clips + Clip("", "text", 1, 0L, 5000L, playheadMs, caption = "New title")
+                                    updated[selected] = project.copy(clips = cs)
+                                    projects = updated
+                                    activeClip = cs.lastIndex
+                                    saveProjects(updated)
+                                }) { Icon(Icons.Default.TextFields, "Add text") }
+                            }
                                 Surface(color = Color(0xFFE9E1F2), shape = RoundedCornerShape(12.dp)) {
                                     Text(project.ratio, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                         color = purple, style = MaterialTheme.typography.labelMedium)
@@ -629,17 +640,6 @@ class MainActivity : ComponentActivity() {
                                 Text("${"%.1f".format(java.util.Locale.US, playheadMs / 1000.0)}s",
                                     style = MaterialTheme.typography.bodySmall)
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                IconButton(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.VideoLibrary, "Media library") }
-                                IconButton(onClick = {
-                                    val updated = projects.toMutableList()
-                                    val cs = project.clips + Clip("", "text", 1, 0L, 5000L, playheadMs, caption = "New title")
-                                    updated[selected] = project.copy(clips = cs)
-                                    projects = updated
-                                    activeClip = cs.lastIndex
-                                    saveProjects(updated)
-                                }) { Icon(Icons.Default.TextFields, "Add text") }
-                            }
                             Spacer(Modifier.height(10.dp))
                             HorizontalDivider(color = Color(0xFFE7DFF0))
                             Spacer(Modifier.height(8.dp))
@@ -689,6 +689,59 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             )
+                            Spacer(Modifier.height(10.dp))
+                            Text("Tools", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            val toolItems = listOf(
+                                Triple("Cut", Icons.Default.ContentCut, true),
+                                Triple("Filters", Icons.Default.Tune, false),
+                                Triple("Transitions", Icons.Default.Animation, false),
+                                Triple("Delete", Icons.Default.DeleteOutline, true),
+                                Triple("Speed", Icons.Default.Speed, false),
+                                Triple("Volume", Icons.Default.VolumeUp, false),
+                                Triple("Text", Icons.Default.TextFields, true),
+                                Triple("Media", Icons.Default.VideoLibrary, true)
+                            )
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                toolItems.forEach { (name, picture, implemented) ->
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.width(78.dp)) {
+                                        FilledTonalIconButton(
+                                            enabled = implemented && (currentClip != null || name == "Text" || name == "Media"),
+                                            modifier = Modifier.size(58.dp),
+                                            onClick = {
+                                                when (name) {
+                                                    "Delete" -> {
+                                                        if (activeClip in project.clips.indices) {
+                                                            val updated = projects.toMutableList()
+                                                            val remaining = project.clips.toMutableList().apply { removeAt(activeClip) }
+                                                            updated[selected] = project.copy(clips = remaining)
+                                                            projects = updated
+                                                            activeClip = if (remaining.isEmpty()) -1 else activeClip.coerceAtMost(remaining.lastIndex)
+                                                            previewPlaying = false
+                                                            playheadMs = 0L
+                                                            saveProjects(updated)
+                                                        }
+                                                    }
+                                                    "Text" -> {
+                                                        val updated = projects.toMutableList()
+                                                        val remaining = project.clips + Clip("", "text", 1, 0L, 5000L, playheadMs, caption = "New title")
+                                                        updated[selected] = project.copy(clips = remaining)
+                                                        projects = updated
+                                                        activeClip = remaining.lastIndex
+                                                        saveProjects(updated)
+                                                    }
+                                                    "Media" -> { selectedTrack = 0; sharedLibrary = false; showLibrary = true }
+                                                    "Cut" -> { /* Existing split control remains in selected-clip tools below. */ }
+                                                }
+                                            }
+                                        ) { Icon(picture, name, tint = purple) }
+                                        Text(if (implemented) name else "$" + "{name} · Soon",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 2, textAlign = TextAlign.Center)
+                                    }
+                                }
+                            }
                             Spacer(Modifier.height(14.dp))
                             Text("Selected clip", style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold)
