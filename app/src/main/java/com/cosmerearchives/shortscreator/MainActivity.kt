@@ -962,7 +962,9 @@ class MainActivity : ComponentActivity() {
                                     if (adjustment == "In point") AlertDialog(
                                         onDismissRequest = { saveProjects(projects); adjustment = null },
                                         title = { Text("In point") },
-                                        text = { Column {                                     Text("In point", style = MaterialTheme.typography.labelSmall)
+                                        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            TrimFeedback(currentClip.startMs, currentClip.endMs, duration)
+                                            Text("In point", style = MaterialTheme.typography.labelSmall)
                                     Slider(
                                         value = currentClip.startMs.toFloat(),
                                         onValueChange = { value ->
@@ -981,7 +983,9 @@ class MainActivity : ComponentActivity() {
                                     if (adjustment == "Out point") AlertDialog(
                                         onDismissRequest = { saveProjects(projects); adjustment = null },
                                         title = { Text("Out point") },
-                                        text = { Column {                                     Text("Out point", style = MaterialTheme.typography.labelSmall)
+                                        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            TrimFeedback(currentClip.startMs, currentClip.endMs, duration)
+                                            Text("Out point", style = MaterialTheme.typography.labelSmall)
                                     Slider(
                                         value = currentClip.endMs.toFloat(),
                                         onValueChange = { value ->
@@ -2114,6 +2118,37 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                     }
                 }
             }
+        }
+    }
+}
+
+
+@Composable
+private fun TrimFeedback(startMs: Long, endMs: Long, sourceMs: Long) {
+    val total = sourceMs.coerceAtLeast(1L)
+    val start = startMs.coerceIn(0L, total)
+    val end = endMs.coerceIn(start, total)
+    val fmt: (Long) -> String = { ms -> "%.2fs".format(java.util.Locale.US, ms / 1000.0) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Kept: ${fmt(end - start)}", fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.titleMedium)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Start  ${fmt(start)}", style = MaterialTheme.typography.bodySmall)
+            Text("End  ${fmt(end)}", style = MaterialTheme.typography.bodySmall)
+        }
+        Canvas(Modifier.fillMaxWidth().height(38.dp)) {
+            val left = (start.toFloat() / total).coerceIn(0f, 1f) * size.width
+            val right = (end.toFloat() / total).coerceIn(0f, 1f) * size.width
+            drawRect(Color(0xFFDDD8E5))
+            drawRect(Color(0xFF75618F), topLeft = Offset(left, 0f),
+                size = androidx.compose.ui.geometry.Size((right - left).coerceAtLeast(0f), size.height))
+            drawLine(Color.White, Offset(left, 0f), Offset(left, size.height), 3.dp.toPx())
+            drawLine(Color.White, Offset(right, 0f), Offset(right, size.height), 3.dp.toPx())
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("0s", style = MaterialTheme.typography.labelSmall)
+            Text("Purple = retained footage", style = MaterialTheme.typography.labelSmall)
+            Text(fmt(total), style = MaterialTheme.typography.labelSmall)
         }
     }
 }
