@@ -58,7 +58,7 @@ object Exporter {
         }
         val overlayOnly = sourceMain.isEmpty()
         val durationMs = clips.filter { it.track != 0 }.maxOfOrNull {
-            it.positionMs + (it.endMs - it.startMs).coerceAtLeast(0L)
+            it.positionMs + it.timelineDurationMs()
         } ?: 0L
         require(!overlayOnly || durationMs > 0L) { "Add text or an overlay before exporting" }
         val main = if (overlayOnly) {
@@ -115,7 +115,7 @@ object Exporter {
         var timelineStartMs = 0L
         val edits = main.mapIndexed { index, clip ->
             val segmentStart = timelineStartMs
-            timelineStartMs += ((clip.endMs - clip.startMs) / clip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
+            timelineStartMs += clip.timelineDurationMs()
             val media = if (overlayOnly) {
                 MediaItem.Builder().setUri(Uri.parse(clip.uri)).setImageDurationMs(durationMs).build()
             } else MediaItem.Builder().setUri(Uri.parse(clip.uri))
@@ -126,11 +126,11 @@ object Exporter {
                     override fun getBitmap(presentationTimeUs: Long): Bitmap = bitmap
                     override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
                         val timeMs = segmentStart + presentationTimeUs / 1000L
-                        val visible = timeMs >= image.positionMs && timeMs < image.positionMs + image.endMs.coerceAtLeast(5000L)
+                        val visible = timeMs >= image.positionMs && timeMs < image.positionMs + image.timelineDurationMs()
                         return StaticOverlaySettings.Builder()
                             .setAlphaScale(if (!visible) 0f else if (image.transition == "Fade in/out") {
                                 val elapsed = (timeMs - image.positionMs).coerceAtLeast(0L)
-                                val length = (image.endMs - image.startMs).coerceAtLeast(1L)
+                                val length = image.timelineDurationMs().coerceAtLeast(1L)
                                 val fade = minOf(image.fadeDurationMs.coerceIn(100L, 3000L), length / 3).coerceAtLeast(1L)
                                 minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
                             } else 1f)
