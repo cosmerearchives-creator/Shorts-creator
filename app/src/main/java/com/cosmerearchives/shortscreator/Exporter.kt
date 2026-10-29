@@ -131,7 +131,7 @@ object Exporter {
                             .setAlphaScale(if (!visible) 0f else if (image.transition == "Fade in/out") {
                                 val elapsed = (timeMs - image.positionMs).coerceAtLeast(0L)
                                 val length = (image.endMs - image.startMs).coerceAtLeast(1L)
-                                val fade = minOf(400L, length / 3).coerceAtLeast(1L)
+                                val fade = minOf(image.fadeDurationMs.coerceIn(100L, 3000L), length / 3).coerceAtLeast(1L)
                                 minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
                             } else 1f)
                             .setScale(if (image.kind == "image") image.imageScale else 1f, if (image.kind == "image") image.imageScale else 1f)
@@ -188,7 +188,12 @@ object Exporter {
             val item = MediaItem.Builder().setUri(Uri.parse(clip.uri))
                 .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                     .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
-            builder.addItem(EditedMediaItem.Builder(item).setEffects(Effects(
+            builder.addItem(EditedMediaItem.Builder(item).apply {
+                if (clip.clipSpeed != 1f) setSpeed(object : SpeedProvider {
+                    override fun getSpeed(timeUs: Long): Float = clip.clipSpeed.coerceIn(0.5f, 2f)
+                    override fun getNextSpeedChangeTimeUs(timeUs: Long): Long = C.TIME_UNSET
+                })
+            }.setEffects(Effects(
                 if (clip.clipVolume < 0.999f) listOf(
                     ChannelMixingAudioProcessor().apply {
                         for (channels in 1..6) {
