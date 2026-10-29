@@ -1,2 +1,2 @@
-Release request: v0.74.0-alpha
-Build 75 - main video clip volume adjustment and exported gain
+Release request: v0.75.0-alpha
+Build 76 - speed adjustment for main-track video and audio export
