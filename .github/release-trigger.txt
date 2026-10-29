@@ -1,2 +1,2 @@
-Release request: v0.86.0-alpha
-Build 87 - purple section dividers and reduced editor gaps
+Release request: v0.87.0-alpha
+Build 88 - compact two-column media library thumbnails
