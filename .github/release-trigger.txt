@@ -1,2 +1,2 @@
-Release request: v0.67.0-alpha
-Build 68 - aspect-ratio header controls and scrollable offline tools with Cut, Duplicate, Delete
+Release request: v0.68.0-alpha
+Build 69 - compact 9:16 canvas and adjacent vertical playback controls
