@@ -708,7 +708,8 @@ class MainActivity : ComponentActivity() {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.width(78.dp)) {
                                         FilledTonalIconButton(
-                                            enabled = implemented && (currentClip != null || name == "Text" || name == "Media"),
+                                            enabled = implemented && (currentClip != null || name == "Text" || name == "Media") &&
+                                                (name != "Cut" || (currentClip?.kind == "video" && currentClip.endMs - currentClip.startMs > 200L)),
                                             modifier = Modifier.size(58.dp),
                                             onClick = {
                                                 when (name) {
