@@ -1,2 +1,2 @@
-Release request: v0.73.0-alpha
-Build 74 - offline grayscale filter tool for video clips
+Release request: v0.74.0-alpha
+Build 75 - main video clip volume adjustment and exported gain
