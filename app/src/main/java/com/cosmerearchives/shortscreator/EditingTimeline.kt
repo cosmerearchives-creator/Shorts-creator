@@ -70,7 +70,7 @@ fun EditingTimeline(
     var zoom by rememberSaveable { mutableFloatStateOf(1f) }
     val pxPerMs = with(density) { (PX_PER_SECOND_DP * zoom).dp.toPx() } / 1000f
     val leftPx = with(density) { START_DP.dp.toPx() }
-    val durations = remember(clips) { clips.map { max(100L, ((it.endMs - it.startMs) / (if (it.kind == "audio" || it.track == 0 && it.kind == "video") it.clipSpeed.coerceIn(0.5f, 2f) else 1f)).toLong()) } }
+    val durations = remember(clips) { clips.map { it.timelineDurationMs().coerceAtLeast(1L) } }
     var running = 0L
     val positions = clips.mapIndexed { index, clip ->
         if (clip.track == 0) {
