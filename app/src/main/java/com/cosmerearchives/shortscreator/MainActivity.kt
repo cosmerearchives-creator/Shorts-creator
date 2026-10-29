@@ -435,8 +435,13 @@ class MainActivity : ComponentActivity() {
                             DisposableEffect(previewPlayer) {
                                 onDispose { previewPlayer?.release() }
                             }
-                            LaunchedEffect(previewPlayer) {
-                                if (previewPlayer != null) previewPlaying = false
+                            // Keep playback active when the playhead crosses between main-track clips.
+                            LaunchedEffect(previewPlayer, previewStart) {
+                                if (previewPlayer != null) {
+                                    val speed = previewClip?.clipSpeed?.coerceIn(0.5f, 2f) ?: 1f
+                                    val offset = ((playheadMs - previewStart).coerceAtLeast(0L) * speed).toLong()
+                                    previewPlayer.seekTo(offset)
+                                }
                             }
                             LaunchedEffect(previewPlaying, previewPlayer, timelineEndMs) {
                                 if (previewPlayer != null || !previewPlaying) return@LaunchedEffect
@@ -462,7 +467,12 @@ class MainActivity : ComponentActivity() {
                                     kotlinx.coroutines.delay(60L)
                                 }
                                 previewPlayer.pause()
-                                previewPlaying = false
+                                if (previewPlayer.playbackState == androidx.media3.common.Player.STATE_ENDED &&
+                                    previewStart + (previewClip?.timelineDurationMs() ?: 0L) < timelineEndMs) {
+                                    playheadMs = previewStart + (previewClip?.timelineDurationMs() ?: 0L)
+                                } else {
+                                    previewPlaying = false
+                                }
                             }
                             val previewLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
                             DisposableEffect(previewPlayer, previewLifecycle) {
