@@ -187,7 +187,11 @@ class MainActivity : ComponentActivity() {
                             Text("Storm Vision", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                             IconButton(onClick = { showSettings = !showSettings; selected = -1 }) { Icon(Icons.Default.Settings, "Settings") }
                         }
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(if (selected in projects.indices && !showSettings) 3.dp else 12.dp))
+                        if (selected in projects.indices && !showSettings) {
+                            HorizontalDivider(color = purple, thickness = 2.dp)
+                            Spacer(Modifier.height(5.dp))
+                        }
                         if (showSettings) {
                             Text("Settings", style = MaterialTheme.typography.titleLarge)
                             Text("Version ${BuildConfig.VERSION_NAME} · Build ${BuildConfig.VERSION_CODE}",
@@ -885,9 +889,9 @@ class MainActivity : ComponentActivity() {
                             }
 
                             }
-                            Spacer(Modifier.height(10.dp))
-                            HorizontalDivider(color = Color(0xFFE7DFF0))
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(4.dp))
+                            HorizontalDivider(color = purple, thickness = 2.dp)
+                            Spacer(Modifier.height(3.dp))
                             EditingTimeline(
                                 clips = project.clips,
                                 selectedIndex = activeClip,
