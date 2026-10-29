@@ -9,6 +9,7 @@ import android.media.MediaCodec
 import android.media.MediaFormat
 import java.nio.ByteOrder
 import androidx.media3.effect.RgbFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -553,6 +554,12 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                                 project.clips.forEachIndexed { clipIndex, overlay ->
+                                    val overlayFade = if (overlay.transition == "Fade in/out") {
+                                        val elapsed = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
+                                        val length = (overlay.endMs - overlay.startMs).coerceAtLeast(1L)
+                                        val fade = minOf(400L, length / 3).coerceAtLeast(1L)
+                                        minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
+                                    } else 1f
                                     if (overlay.track == 1 &&
                                         playheadMs >= overlay.positionMs &&
                                         playheadMs < overlay.positionMs + (overlay.endMs - overlay.startMs).coerceAtLeast(0L)) {
@@ -569,7 +576,7 @@ class MainActivity : ComponentActivity() {
                                                 } else Color(overlay.textColor),
                                                     fontSize = (overlay.textSize * 0.42f).sp,
                                                     textAlign = TextAlign.Center,
-                                                    modifier = Modifier.align(Alignment.TopStart)
+                                                    modifier = Modifier.align(Alignment.TopStart).graphicsLayer(alpha = overlayFade)
                                                         .offset { androidx.compose.ui.unit.IntOffset(x - previewSize.width / 4, y - 24) }
                                                         .width(180.dp)
                                                         .pointerInput(clipIndex, previewSize) {
@@ -607,7 +614,7 @@ class MainActivity : ComponentActivity() {
                                                             androidx.compose.ui.graphics.ColorFilter.colorMatrix(
                                                                 androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) })
                                                         else null,
-                                                        modifier = Modifier.align(Alignment.Center)
+                                                        modifier = Modifier.align(Alignment.Center).graphicsLayer(alpha = overlayFade)
                                                             .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
                                                             .fillMaxWidth((0.7f * overlay.imageScale).coerceIn(0.1f, 1f)).height((150f * overlay.imageScale).dp)
                                                             .pointerInput(clipIndex, previewSize) {
@@ -726,6 +733,12 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                                 project.clips.forEachIndexed { clipIndex, overlay ->
+                                    val overlayFade = if (overlay.transition == "Fade in/out") {
+                                        val elapsed = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
+                                        val length = (overlay.endMs - overlay.startMs).coerceAtLeast(1L)
+                                        val fade = minOf(400L, length / 3).coerceAtLeast(1L)
+                                        minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
+                                    } else 1f
                                     if (overlay.track == 1 &&
                                         playheadMs >= overlay.positionMs &&
                                         playheadMs < overlay.positionMs + (overlay.endMs - overlay.startMs).coerceAtLeast(0L)) {
@@ -742,7 +755,7 @@ class MainActivity : ComponentActivity() {
                                                 } else Color(overlay.textColor),
                                                     fontSize = (overlay.textSize * 0.42f).sp,
                                                     textAlign = TextAlign.Center,
-                                                    modifier = Modifier.align(Alignment.TopStart)
+                                                    modifier = Modifier.align(Alignment.TopStart).graphicsLayer(alpha = overlayFade)
                                                         .offset { androidx.compose.ui.unit.IntOffset(x - previewSize.width / 4, y - 24) }
                                                         .width(180.dp)
                                                         .pointerInput(clipIndex, previewSize) {
@@ -780,7 +793,7 @@ class MainActivity : ComponentActivity() {
                                                             androidx.compose.ui.graphics.ColorFilter.colorMatrix(
                                                                 androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) })
                                                         else null,
-                                                        modifier = Modifier.align(Alignment.Center)
+                                                        modifier = Modifier.align(Alignment.Center).graphicsLayer(alpha = overlayFade)
                                                             .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
                                                             .fillMaxWidth((0.7f * overlay.imageScale).coerceIn(0.1f, 1f)).height((150f * overlay.imageScale).dp)
                                                             .pointerInput(clipIndex, previewSize) {
@@ -934,7 +947,7 @@ class MainActivity : ComponentActivity() {
                                                 (name != "Filters" || (currentClip?.kind == "image" || currentClip?.kind == "text" || currentClip?.kind == "video" && currentClip.track == 0)) &&
                                                 (name != "Volume" || (currentClip?.kind == "audio" || currentClip?.kind == "video" && currentClip.track == 0)) &&
                                                 (name != "Speed" || (currentClip?.track == 0 && currentClip.kind == "video")) &&
-                                                (name != "Transitions" || (currentClip?.track == 0 && currentClip.kind == "video")),
+                                                (name != "Transitions" || (currentClip?.track == 0 && currentClip.kind == "video" || currentClip?.track == 1 && currentClip.kind in listOf("image", "text"))),
                                             modifier = Modifier.size(58.dp),
                                             onClick = {
                                                 when (name) {
@@ -1076,12 +1089,12 @@ class MainActivity : ComponentActivity() {
                                     } },
                                     confirmButton = { TextButton(onClick = { saveProjects(projects); adjustment = null }) { Text("Done") } })
                             }
-                            if (adjustment == "Transitions" && currentClip?.kind == "video" && currentClip.track == 0) {
+                            if (adjustment == "Transitions" && currentClip != null && (currentClip.track == 0 && currentClip.kind == "video" || currentClip.track == 1 && currentClip.kind in listOf("image", "text"))) {
                                 AlertDialog(onDismissRequest = { adjustment = null },
                                     title = { Text("Transition into clip") },
                                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text("Choose how this clip enters from the previous one. The first clip has no incoming transition.")
-                                        listOf("None", "Fade through black").forEach { option ->
+                                        Text(if (currentClip.track == 1) "Fade this overlay in and out without covering the background." else "Choose how this clip enters from the previous one. The first clip has no incoming transition.")
+                                        (if (currentClip.track == 1) listOf("None", "Fade in/out") else listOf("None", "Fade through black")).forEach { option ->
                                             FilledTonalButton(onClick = {
                                                 val cs = project.clips.toMutableList()
                                                 cs[activeClip] = currentClip.copy(transition = option)
