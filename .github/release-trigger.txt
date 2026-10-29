@@ -1,2 +1,2 @@
-Release request: v0.84.0-alpha
-Build 85 - clip move tools, dashboard Sort, duplicate split removal
+Release request: v0.85.0-alpha
+Build 86 - export next to project title and simplify header
