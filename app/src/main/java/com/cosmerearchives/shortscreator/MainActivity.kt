@@ -376,7 +376,7 @@ class MainActivity : ComponentActivity() {
                             var previewStart = 0L
                             val previewIndex = project.clips.indices.firstOrNull { i ->
                                 if (project.clips[i].track != 0) false else {
-                                    val span = (project.clips[i].endMs - project.clips[i].startMs).coerceAtLeast(0L)
+                                    val span = ((project.clips[i].endMs - project.clips[i].startMs).coerceAtLeast(0L) / project.clips[i].clipSpeed.coerceIn(0.5f, 2f)).toLong()
                                     val inside = playheadMs >= previewStart && playheadMs < previewStart + span
                                     if (!inside) previewStart += span
                                     inside
@@ -384,7 +384,7 @@ class MainActivity : ComponentActivity() {
                             }
                             val previewClip = previewIndex?.let { project.clips[it] }
                             val timelineEndMs = maxOf(
-                                project.clips.filter { it.track == 0 }.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) },
+                                project.clips.filter { it.track == 0 }.sumOf { ((it.endMs - it.startMs).coerceAtLeast(0L) / it.clipSpeed.coerceIn(0.5f, 2f)).toLong() },
                                 project.clips.filter { it.track != 0 }.maxOfOrNull { it.positionMs + (it.endMs - it.startMs).coerceAtLeast(0L) } ?: 0L
                             )
                             var previewPlaying by remember(selected) { mutableStateOf(false) }
@@ -397,6 +397,9 @@ class MainActivity : ComponentActivity() {
                                         prepare()
                                     }
                                 }
+                            }
+                            LaunchedEffect(previewPlayer, previewClip?.clipSpeed) {
+                                previewPlayer?.setPlaybackSpeed(previewClip?.clipSpeed?.coerceIn(0.5f, 2f) ?: 1f)
                             }
                             DisposableEffect(previewPlayer) {
                                 onDispose { previewPlayer?.release() }
@@ -424,7 +427,7 @@ class MainActivity : ComponentActivity() {
                                 previewPlayer.play()
                                 while (previewPlayer.playWhenReady &&
                                     previewPlayer.playbackState != androidx.media3.common.Player.STATE_ENDED) {
-                                    playheadMs = previewStart + previewPlayer.currentPosition
+                                    playheadMs = previewStart + (previewPlayer.currentPosition / (previewClip?.clipSpeed?.coerceIn(0.5f, 2f) ?: 1f)).toLong()
                                     kotlinx.coroutines.delay(60L)
                                 }
                                 previewPlayer.pause()
@@ -446,7 +449,7 @@ class MainActivity : ComponentActivity() {
                             }
                             LaunchedEffect(playheadMs, previewPlayer, previewPlaying) {
                                 if (!previewPlaying && previewPlayer != null) {
-                                    val pos = (playheadMs - previewStart).coerceAtLeast(0L)
+                                    val pos = ((playheadMs - previewStart).coerceAtLeast(0L) * (previewClip?.clipSpeed?.coerceIn(0.5f, 2f) ?: 1f)).toLong()
                                     if (kotlin.math.abs(previewPlayer.currentPosition - pos) > 80L) previewPlayer.seekTo(pos)
                                 }
                             }
