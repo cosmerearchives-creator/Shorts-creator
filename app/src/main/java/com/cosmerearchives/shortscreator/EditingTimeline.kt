@@ -28,6 +28,9 @@ import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.clipRect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
@@ -93,6 +96,25 @@ fun EditingTimeline(
     val liveTrim = rememberUpdatedState(onTrim)
     val liveReorder = rememberUpdatedState(onReorder)
     val laneIndices = remember(clips) { (0..2).associateWith { lane -> clips.indices.filter { clips[it].track == lane } } }
+    // The trim strip already extracts and caches peaks. Decode asynchronously, once per media URI.
+    val audioSources = clips.mapNotNull { clip ->
+        when {
+            clip.kind == "audio" || clip.kind == "video" -> clip.uri.takeIf { it.isNotBlank() }
+            clip.kind == "text" -> clip.ttsUri.takeIf { it.isNotBlank() }
+            else -> null
+        }
+    }.distinct()
+    val waveforms = remember { mutableStateMapOf<String, List<Float>>() }
+    LaunchedEffect(audioSources) {
+        audioSources.forEach { uri ->
+            if (uri !in waveforms) {
+                // A missing audio stream is stored as an empty list so silent videos aren't decoded again.
+                waveforms[uri] = withContext(Dispatchers.IO) {
+                    cachedAudioPeaks(context, Uri.parse(uri))
+                }
+            }
+        }
+    }
     val rulerPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE } }
     val clipPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE } }
     val lanes = remember { listOf(1 to "Overlay", 0 to "Main", 2 to "Audio") }
@@ -217,6 +239,37 @@ fun EditingTimeline(
                         val w = max(12.dp.toPx(), durations[i] * pxPerMs - 2.dp.toPx())
                         val tint = if (clips[i].kind == "audio") audioColor else if (lane == 0) videoColor else overlayColor
                         drawRect(tint, Offset(x, 8.dp.toPx()), androidx.compose.ui.geometry.Size(w, 44.dp.toPx()))
+                        val clip = clips[i]
+                        val audioUri = when (clip.kind) {
+                            "video", "audio" -> clip.uri
+                            "text" -> clip.ttsUri
+                            else -> ""
+                        }
+                        val peaks = waveforms[audioUri].orEmpty()
+                        if (peaks.isNotEmpty() && clip.endMs > clip.startMs) {
+                            // Use the source's full duration for accurate trim offsets. The waveform
+                            // is based on the unmodified source, not the on-screen clip length.
+                            val sourceDuration = clip.endMs.coerceAtLeast(1L)
+                            val sourceEnd = clip.endMs.coerceAtLeast(sourceDuration)
+                            val sourceStart = clip.startMs.coerceAtLeast(0L)
+                            val bars = ((w / 3.dp.toPx()).toInt()).coerceIn(1, 240)
+                            val barWidth = w / bars
+                            clipRect(x, 8.dp.toPx(), x + w, 52.dp.toPx()) {
+                                for (bar in 0 until bars) {
+                                    val fraction = (bar + 0.5f) / bars
+                                    val time = sourceStart + ((sourceEnd - sourceStart) * fraction).toLong()
+                                    val index = ((time.toDouble() / sourceDuration) * peaks.size)
+                                        .toInt().coerceIn(0, peaks.lastIndex)
+                                    val amplitude = peaks[index].coerceIn(0f, 1f)
+                                    val halfHeight = (amplitude * 16.dp.toPx()).coerceAtLeast(1.dp.toPx())
+                                    val barX = x + (bar + 0.5f) * barWidth
+                                    drawLine(Color.White.copy(alpha = if (i == selectedIndex) 0.68f else 0.43f),
+                                        Offset(barX, 30.dp.toPx() - halfHeight),
+                                        Offset(barX, 30.dp.toPx() + halfHeight),
+                                        strokeWidth = (barWidth * 0.6f).coerceAtLeast(1f))
+                                }
+                            }
+                        }
                         if (i == selectedIndex) {
                             drawRect(Color.White.copy(alpha = 0.8f), Offset(x, 8.dp.toPx()),
                                 androidx.compose.ui.geometry.Size(4.dp.toPx(), 44.dp.toPx()))
