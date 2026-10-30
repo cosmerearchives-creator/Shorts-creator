@@ -2470,7 +2470,7 @@ private fun LibraryMediaPreview(item: LibraryMedia, modifier: Modifier = Modifie
 private val waveformCache = object : android.util.LruCache<String, List<Float>>(32) {}
 private val waveformLocks = java.util.concurrent.ConcurrentHashMap<String, Any>()
 
-private fun cachedAudioPeaks(context: android.content.Context, uri: Uri): List<Float> {
+internal fun cachedAudioPeaks(context: android.content.Context, uri: Uri): List<Float> {
     val key = uri.toString()
     synchronized(waveformCache) { waveformCache.get(key)?.let { return it } }
     val lock = waveformLocks.getOrPut(key) { Any() }
@@ -2518,7 +2518,7 @@ internal fun extractAudioPeaks(context: android.content.Context, uri: Uri): List
             codec.configure(format, null, null, 0)
             codec.start()
             val info = MediaCodec.BufferInfo()
-            val peaks = FloatArray(96)
+            val peaks = FloatArray(384)
             var samplesSeen = 0L
             val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
             var inputDone = false
