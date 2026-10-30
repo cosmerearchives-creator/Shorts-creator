@@ -92,6 +92,9 @@ fun EditingTimeline(
     val liveMove = rememberUpdatedState(onMove)
     val liveTrim = rememberUpdatedState(onTrim)
     val liveReorder = rememberUpdatedState(onReorder)
+    val laneIndices = remember(clips) { (0..2).associateWith { lane -> clips.indices.filter { clips[it].track == lane } } }
+    val rulerPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE } }
+    val clipPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE } }
     val lanes = remember { listOf(1 to "Overlay", 0 to "Main", 2 to "Audio") }
     Column {
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
@@ -118,7 +121,7 @@ fun EditingTimeline(
                 detectTapGestures { tap -> onScrub(((tap.x + visibleScroll.value - leftPx) / pxPerMs).toLong().coerceIn(0, total)) }
             }) {
                 drawRect(timelineDark)
-                val paint = Paint().apply { color = android.graphics.Color.WHITE; textSize = 11.sp.toPx(); isAntiAlias = true }
+                val paint = rulerPaint.apply { textSize = 11.sp.toPx() }
                 val scroll = visibleScroll.value
                 val first = (((scroll - leftPx) / (pxPerMs * 1000f)).toInt() - 1).coerceAtLeast(0)
                 val last = (((scroll + size.width - leftPx) / (pxPerMs * 1000f)).toInt() + 1).coerceAtMost((total / 1000L).toInt())
@@ -142,8 +145,8 @@ fun EditingTimeline(
                         val durations = liveDurations.value
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val time = ((down.position.x + visibleScroll.value - leftPx) / pxPerMs).toLong().coerceAtLeast(0L)
-                        val moving = clips.indices.lastOrNull { i ->
-                            clips[i].track == lane && time in positions[i]..(positions[i] + durations[i])
+                        val moving = (laneIndices[lane] ?: emptyList()).lastOrNull { i ->
+                            time in positions[i]..(positions[i] + durations[i])
                         }
                         val start = moving?.let { positions[it] } ?: 0L
                         val initialClip = moving?.let { clips[it] }
@@ -194,7 +197,7 @@ fun EditingTimeline(
                                 }
                                 if (action == 3 && initialClip.track == 0) {
                                     val destinationTime = start + (totalDx / pxPerMs).toLong() + durations[moving] / 2
-                                    val destination = clips.indices.filter { clips[it].track == 0 }
+                                    val destination = (laneIndices[0] ?: emptyList())
                                         .minByOrNull { kotlin.math.abs(positions[it] + durations[it] / 2 - destinationTime) }
                                     if (destination != null && destination != moving) liveReorder.value(moving, destination)
                                 }
@@ -203,14 +206,13 @@ fun EditingTimeline(
                     }
                 }) {
                     drawRect(timelineDark)
-                    val paint = Paint().apply { isAntiAlias = true; textSize = 12.sp.toPx(); color = android.graphics.Color.WHITE }
+                    val paint = clipPaint.apply { textSize = 12.sp.toPx() }
                     drawContext.canvas.nativeCanvas.drawText(label, 7.dp.toPx(), 32.dp.toPx(), paint)
                     drawLine(Color(0xFF524B5D), Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f))
                     val scroll = visibleScroll.value
-                    clips.indices.filter { clips[it].track == lane &&
-                        leftPx + (positions[it] + durations[it]) * pxPerMs >= scroll &&
-                        leftPx + positions[it] * pxPerMs <= scroll + size.width
-                    }.forEach { i ->
+                    (laneIndices[lane] ?: emptyList()).forEach { i ->
+                        if (leftPx + (positions[i] + durations[i]) * pxPerMs < scroll ||
+                            leftPx + positions[i] * pxPerMs > scroll + size.width) return@forEach
                         val x = leftPx + positions[i] * pxPerMs - scroll
                         val w = max(12.dp.toPx(), durations[i] * pxPerMs - 2.dp.toPx())
                         val tint = if (clips[i].kind == "audio") audioColor else if (lane == 0) videoColor else overlayColor
