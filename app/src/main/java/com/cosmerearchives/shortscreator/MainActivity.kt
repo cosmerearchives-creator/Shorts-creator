@@ -114,6 +114,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             var projects by remember { mutableStateOf(loadProjects()) }
             var selected by remember { mutableIntStateOf(-1) }
+            // Timeline history is per project and bounded to avoid retaining unlimited media edits.
+            val undoHistory = remember { mutableStateMapOf<String, List<Project>>() }
+            val redoHistory = remember { mutableStateMapOf<String, List<Project>>() }
+            val recordedProjects = remember { mutableMapOf<String, Project>() }
+
             var projectDeleteTargets by remember { mutableStateOf<Set<Int>>(emptySet()) }
             var confirmProjectDelete by remember { mutableStateOf(false) }
             var bulkProjectMode by remember { mutableStateOf(false) }
@@ -364,6 +369,24 @@ class MainActivity : ComponentActivity() {
                             var activeClip by remember(selected) { mutableIntStateOf(project.clips.indexOfFirst { it.track == 0 }.coerceAtLeast(0)) }
                             var playheadMs by remember(selected) { mutableLongStateOf(0L) }
                             val currentClip = project.clips.getOrNull(activeClip)
+                            LaunchedEffect(project.id, project.clips) {
+                                val prior = recordedProjects[project.id]
+                                if (prior != null && prior.clips != project.clips) {
+                                    undoHistory[project.id] = (undoHistory[project.id].orEmpty() + prior).takeLast(40)
+                                    redoHistory[project.id] = emptyList()
+                                }
+                                recordedProjects[project.id] = project
+                            }
+                            fun restoreTimeline(snapshot: Project) {
+                                val updated = projects.toMutableList()
+                                updated[selected] = snapshot
+                                recordedProjects[project.id] = snapshot
+                                projects = updated
+                                activeClip = activeClip.coerceIn(0, (snapshot.clips.size - 1).coerceAtLeast(0))
+                                previewPlaying = false
+                                saveProjects(updated)
+                            }
+
                             var adjustment by remember(selected, activeClip) { mutableStateOf<String?>(null) }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(project.name, style = MaterialTheme.typography.titleMedium,
@@ -955,7 +978,26 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                             Spacer(Modifier.height(10.dp))
-                            Text("Tools", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Tools", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                TextButton(enabled = undoHistory[project.id].orEmpty().isNotEmpty(), onClick = {
+                                    val stack = undoHistory[project.id].orEmpty()
+                                    if (stack.isNotEmpty()) {
+                                        undoHistory[project.id] = stack.dropLast(1)
+                                        redoHistory[project.id] = (redoHistory[project.id].orEmpty() + project).takeLast(40)
+                                        restoreTimeline(stack.last())
+                                    }
+                                }) { Icon(Icons.Default.Undo, "Undo"); Text("Undo") }
+                                TextButton(enabled = redoHistory[project.id].orEmpty().isNotEmpty(), onClick = {
+                                    val stack = redoHistory[project.id].orEmpty()
+                                    if (stack.isNotEmpty()) {
+                                        redoHistory[project.id] = stack.dropLast(1)
+                                        undoHistory[project.id] = (undoHistory[project.id].orEmpty() + project).takeLast(40)
+                                        restoreTimeline(stack.last())
+                                    }
+                                }) { Icon(Icons.Default.Redo, "Redo"); Text("Redo") }
+                            }
                             val toolItems = listOf(
                                 Triple("Move left", Icons.Default.ArrowBack, true),
                                 Triple("Move right", Icons.Default.ArrowForward, true),
