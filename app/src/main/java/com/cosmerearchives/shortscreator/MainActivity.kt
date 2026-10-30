@@ -2476,7 +2476,7 @@ internal fun cachedAudioPeaks(context: android.content.Context, uri: Uri): List<
     val lock = waveformLocks.getOrPut(key) { Any() }
     synchronized(lock) {
         synchronized(waveformCache) { waveformCache.get(key)?.let { return it } }
-        val filename = "wave_" + java.security.MessageDigest.getInstance("SHA-256")
+        val filename = "wave_v2_" + java.security.MessageDigest.getInstance("SHA-256")
             .digest(key.toByteArray()).joinToString("") { "%02x".format(it) } + ".bin"
         val file = java.io.File(context.cacheDir, filename)
         val disk = try {
