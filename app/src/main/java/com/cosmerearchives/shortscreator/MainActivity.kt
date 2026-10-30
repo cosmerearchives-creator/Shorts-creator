@@ -366,8 +366,8 @@ class MainActivity : ComponentActivity() {
                             }
                         } else {
                             val project = projects[selected]
-                            var activeClip by remember(selected) { mutableIntStateOf(project.clips.indexOfFirst { it.track == 0 }.coerceAtLeast(0)) }
-                            var playheadMs by remember(selected) { mutableLongStateOf(0L) }
+                            var activeClip by remember(project.id) { mutableIntStateOf(project.clips.indexOfFirst { it.track == 0 }.coerceAtLeast(0)) }
+                            var playheadMs by remember(project.id) { mutableLongStateOf(0L) }
                             val currentClip = project.clips.getOrNull(activeClip)
                             LaunchedEffect(project.id, project.clips) {
                                 val prior = recordedProjects[project.id]
@@ -379,10 +379,13 @@ class MainActivity : ComponentActivity() {
                             }
                             fun restoreTimeline(snapshot: Project) {
                                 val updated = projects.toMutableList()
-                                updated[selected] = snapshot
-                                recordedProjects[project.id] = snapshot
+                                // Undo only the timeline edit, not unrelated project metadata
+                                // (such as a renamed project or a changed export aspect ratio).
+                                val restored = project.copy(clips = snapshot.clips)
+                                updated[selected] = restored
+                                recordedProjects[project.id] = restored
                                 projects = updated
-                                activeClip = activeClip.coerceIn(0, (snapshot.clips.size - 1).coerceAtLeast(0))
+                                activeClip = activeClip.coerceIn(0, (restored.clips.size - 1).coerceAtLeast(0))
                                 previewPlaying = false
                                 saveProjects(updated)
                             }
