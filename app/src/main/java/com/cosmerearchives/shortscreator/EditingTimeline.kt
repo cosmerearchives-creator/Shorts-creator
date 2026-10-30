@@ -104,13 +104,19 @@ fun EditingTimeline(
             else -> null
         }
     }.distinct()
-    val waveforms = remember { mutableStateMapOf<String, List<Float>>() }
+    val waveforms = remember { mutableStateMapOf<String, Pair<Long, List<Float>>>() }
     LaunchedEffect(audioSources) {
         audioSources.forEach { uri ->
             if (uri !in waveforms) {
                 // A missing audio stream is stored as an empty list so silent videos aren't decoded again.
                 waveforms[uri] = withContext(Dispatchers.IO) {
-                    cachedAudioPeaks(context, Uri.parse(uri))
+                    val retriever = android.media.MediaMetadataRetriever()
+                    val durationMs = try {
+                        retriever.setDataSource(context, Uri.parse(uri))
+                        retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                            ?.toLongOrNull()?.coerceAtLeast(1L) ?: 1L
+                    } catch (_: Exception) { 1L } finally { retriever.release() }
+                    durationMs to cachedAudioPeaks(context, Uri.parse(uri))
                 }
             }
         }
@@ -245,12 +251,13 @@ fun EditingTimeline(
                             "text" -> clip.ttsUri
                             else -> ""
                         }
-                        val peaks = waveforms[audioUri].orEmpty()
+                        val waveform = waveforms[audioUri]
+                        val peaks = waveform?.second.orEmpty()
                         if (peaks.isNotEmpty() && clip.endMs > clip.startMs) {
                             // Use the source's full duration for accurate trim offsets. The waveform
                             // is based on the unmodified source, not the on-screen clip length.
-                            val sourceDuration = clip.endMs.coerceAtLeast(1L)
-                            val sourceEnd = clip.endMs.coerceAtLeast(sourceDuration)
+                            val sourceDuration = waveform?.first?.coerceAtLeast(1L) ?: 1L
+                            val sourceEnd = clip.endMs.coerceAtMost(sourceDuration)
                             val sourceStart = clip.startMs.coerceAtLeast(0L)
                             val bars = ((w / 3.dp.toPx()).toInt()).coerceIn(1, 240)
                             val barWidth = w / bars
