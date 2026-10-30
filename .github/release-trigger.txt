@@ -1,2 +1,2 @@
-Release request: v0.90.0-alpha
-Build 91 - reduce image preview memory and redundant speech overlay scans
+Release request: v0.91.0-alpha
+Build 92 - optimized timeline lane indexing and rendering
