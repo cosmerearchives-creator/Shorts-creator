@@ -128,10 +128,10 @@ fun EditingTimeline(
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Timeline", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = { zoom = (zoom / 1.5f).coerceAtLeast(0.25f) },
+            FilledTonalIconButton(onClick = { zoom = (zoom / 1.5f).coerceAtLeast(0.25f) },
                 enabled = zoom > 0.25f) { Icon(Icons.Default.ZoomOut, "Zoom out timeline") }
             Text("${(zoom * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
-            IconButton(onClick = { zoom = (zoom * 1.5f).coerceAtMost(8f) },
+            FilledTonalIconButton(onClick = { zoom = (zoom * 1.5f).coerceAtMost(8f) },
                 enabled = zoom < 8f) { Icon(Icons.Default.ZoomIn, "Zoom in timeline") }
         }
         Text("Playhead: %.1fs".format(playheadMs / 1000.0), style = MaterialTheme.typography.bodySmall)
