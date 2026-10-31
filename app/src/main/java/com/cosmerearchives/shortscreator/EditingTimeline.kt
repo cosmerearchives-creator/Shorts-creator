@@ -180,7 +180,14 @@ fun EditingTimeline(
                         val initialClip = moving?.let { clips[it] }
                         val edgeMs = (14.dp.toPx() / pxPerMs).toLong()
                         val offset = time - start
-                        val action = if (moving == null) 0 else if (initialClip?.kind == "text") 3 else when {
+                        val action = if (moving == null) 0 else if (
+                            initialClip?.kind == "text" || initialClip?.kind == "image"
+                        ) {
+                            // Visual overlays are moved from the body and resized from the right edge.
+                            // At low zoom, reserve a narrow handle so the short clip can still move.
+                            val rightHandle = minOf(edgeMs, durations[moving] / 3L).coerceAtLeast(1L)
+                            if (durations[moving] - offset <= rightHandle) 2 else 3
+                        } else when {
                             offset <= edgeMs -> 1
                             durations[moving] - offset <= edgeMs -> 2
                             else -> 3
