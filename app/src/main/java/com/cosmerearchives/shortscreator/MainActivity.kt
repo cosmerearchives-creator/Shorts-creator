@@ -955,11 +955,17 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onTrim = { index, start, end ->
                                     val clip = projects[selected].clips.getOrNull(index)
-                                    if (clip != null && clip.kind != "text") {
-                                        val maxDuration = getDuration(Uri.parse(clip.uri)).coerceAtLeast(clip.endMs)
+                                    if (clip != null) {
                                         val cs = projects[selected].clips.toMutableList()
-                                        cs[index] = clip.copy(startMs = start.coerceAtLeast(0L),
-                                            endMs = end.coerceAtMost(maxDuration).coerceAtLeast(start + 100L))
+                                        cs[index] = if (clip.kind == "text" || clip.kind == "image") {
+                                            // Text and still images have no fixed media duration. Their right
+                                            // edge changes the overlay's visible length, not the TTS speed.
+                                            clip.copy(endMs = end.coerceIn(clip.startMs + 100L, 600_000L))
+                                        } else {
+                                            val maxDuration = getDuration(Uri.parse(clip.uri)).coerceAtLeast(clip.endMs)
+                                            clip.copy(startMs = start.coerceAtLeast(0L),
+                                                endMs = end.coerceAtMost(maxDuration).coerceAtLeast(start + 100L))
+                                        }
                                         val updated = projects.toMutableList()
                                         updated[selected] = projects[selected].copy(clips = cs)
                                         projects = updated
