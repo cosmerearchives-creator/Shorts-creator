@@ -1,2 +1,2 @@
-Release request: v0.93.0-alpha
-Build 94 - timeline media waveforms, generated speech PCM waveform fix, Undo/Redo compilation repair
+Release request: v0.94.0-alpha
+Build 95 - drag text and image right edges for direct timeline duration editing
