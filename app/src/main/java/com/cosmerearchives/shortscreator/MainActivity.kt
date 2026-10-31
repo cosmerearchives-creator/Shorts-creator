@@ -61,7 +61,7 @@ import kotlin.concurrent.thread
 import kotlinx.coroutines.launch
 
 private val ivory = Color(0xFFF5F4EF)
-private val lavender = Color(0xFFEFE9F5)
+private val lavender = Color(0xFFEDE4FC)
 private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
@@ -187,7 +187,7 @@ class MainActivity : ComponentActivity() {
 
                 }
             }
-            MaterialTheme(colorScheme = lightColorScheme(primary = purple, background = ivory, surface = Color.White, onSurface = ink)) {
+            MaterialTheme(colorScheme = lightColorScheme(primary = purple, primaryContainer = lavender, onPrimaryContainer = ink, secondaryContainer = lavender, onSecondaryContainer = ink, background = Color.White, surface = Color.White, onSurface = ink)) {
                 Surface(color = ivory, modifier = Modifier.fillMaxSize()) {
                     Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -195,7 +195,7 @@ class MainActivity : ComponentActivity() {
                                 IconButton(onClick = { selected = -1; showSettings = false }) { Icon(Icons.Default.ArrowBack, "Back") }
                             }
                             Text("Storm Vision", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { showSettings = !showSettings; selected = -1 }) { Icon(Icons.Default.Settings, "Settings") }
+                            FilledTonalIconButton(onClick = { showSettings = !showSettings; selected = -1 }) { Icon(Icons.Default.Settings, "Settings") }
                         }
                         Spacer(Modifier.height(if (selected in projects.indices && !showSettings) 3.dp else 12.dp))
                         if (selected in projects.indices && !showSettings) {
@@ -395,8 +395,8 @@ class MainActivity : ComponentActivity() {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(project.name, style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            IconButton(
-                                enabled = (project.clips.none { it.track == 0 } && project.clips.any { it.track == 1 }) ||
+                            FilledTonalIconButton(
+                                 enabled = (project.clips.none { it.track == 0 } && project.clips.any { it.track == 1 }) ||
                                     (project.clips.any { it.track == 0 } &&
                                         project.clips.filter { it.track == 0 }.all { it.kind == "video" && it.endMs > it.startMs }),
                                 onClick = {
@@ -409,7 +409,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) { Icon(Icons.Default.FileUpload, "Export to library") }
                             Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                                IconButton(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.VideoLibrary, "Media library") }
+                                FilledTonalIconButton(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.VideoLibrary, "Media library") }
                                 IconButton(onClick = {
                                     val updated = projects.toMutableList()
                                     val cs = project.clips + Clip("", "text", 1, 0L, 5000L, playheadMs, caption = "New title")
@@ -575,7 +575,7 @@ class MainActivity : ComponentActivity() {
                             if (project.ratio == "9:16") {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.width(if (project.ratio == "9:16") 138.dp else 0.dp).then(if (project.ratio == "9:16") Modifier else Modifier.fillMaxWidth()).aspectRatio(previewRatio).background(dark, RoundedCornerShape(16.dp))
+                            Box(Modifier.weight(1.08f).aspectRatio(previewRatio).background(dark, RoundedCornerShape(16.dp))
                                 .onSizeChanged { previewSize = it }) {
                                 if (previewClip != null && previewClip.kind == "video") {
                                     AndroidView(
@@ -732,23 +732,27 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            Column(Modifier.width(74.dp), verticalArrangement = Arrangement.Center,
+                            Column(Modifier.weight(0.92f).padding(start = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally) {
-                                IconButton(enabled = timelineEndMs > 0L, onClick = {
+                                FilledTonalIconButton(enabled = timelineEndMs > 0L, modifier = Modifier.size(54.dp), onClick = {
                                     previewPlaying = false
                                     playheadMs = (playheadMs - 5000L).coerceAtLeast(0L)
                                 }) { Icon(Icons.Default.Replay5, "Back 5 seconds") }
-                                IconButton(enabled = timelineEndMs > 0L, onClick = {
+                                Text("Rewind · 5 seconds", style = MaterialTheme.typography.labelSmall)
+                                FilledTonalIconButton(enabled = timelineEndMs > 0L, modifier = Modifier.size(54.dp), onClick = {
                                     previewPlaying = !previewPlaying
                                 }) { Icon(if (previewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     if (previewPlaying) "Pause" else "Play") }
-                                IconButton(enabled = timelineEndMs > 0L, onClick = {
+                                Text(if (previewPlaying) "Pause" else "Play", style = MaterialTheme.typography.labelSmall)
+                                FilledTonalIconButton(enabled = timelineEndMs > 0L, modifier = Modifier.size(54.dp), onClick = {
                                     previewPlaying = false
                                     playheadMs = (playheadMs + 5000L).coerceAtMost(
                                         timelineEndMs)
                                 }) { Icon(Icons.Default.Forward5, "Forward 5 seconds") }
+                                Text("Forward · 5 seconds", style = MaterialTheme.typography.labelSmall)
                                 Text("${"%.1f".format(java.util.Locale.US, playheadMs / 1000.0)}s",
                                     style = MaterialTheme.typography.bodySmall)
+                                Text("Current time", style = MaterialTheme.typography.labelSmall)
                             }
 
                                 }
@@ -913,15 +917,15 @@ class MainActivity : ComponentActivity() {
 
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(enabled = timelineEndMs > 0L, onClick = {
+                                FilledTonalIconButton(enabled = timelineEndMs > 0L, onClick = {
                                     previewPlaying = false
                                     playheadMs = (playheadMs - 5000L).coerceAtLeast(0L)
                                 }) { Icon(Icons.Default.Replay5, "Back 5 seconds") }
-                                IconButton(enabled = timelineEndMs > 0L, onClick = {
+                                FilledTonalIconButton(enabled = timelineEndMs > 0L, onClick = {
                                     previewPlaying = !previewPlaying
                                 }) { Icon(if (previewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     if (previewPlaying) "Pause" else "Play") }
-                                IconButton(enabled = timelineEndMs > 0L, onClick = {
+                                FilledTonalIconButton(enabled = timelineEndMs > 0L, onClick = {
                                     previewPlaying = false
                                     playheadMs = (playheadMs + 5000L).coerceAtMost(
                                         timelineEndMs)
