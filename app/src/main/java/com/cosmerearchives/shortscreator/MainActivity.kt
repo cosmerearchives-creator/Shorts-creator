@@ -369,6 +369,7 @@ class MainActivity : ComponentActivity() {
                             var activeClip by remember(project.id) { mutableIntStateOf(project.clips.indexOfFirst { it.track == 0 }.coerceAtLeast(0)) }
                             var playheadMs by remember(project.id) { mutableLongStateOf(0L) }
                             val currentClip = project.clips.getOrNull(activeClip)
+                            var previewPlaying by remember(project.id) { mutableStateOf(false) }
                             LaunchedEffect(project.id, project.clips) {
                                 val prior = recordedProjects[project.id]
                                 if (prior != null && prior.clips != project.clips) {
@@ -438,7 +439,6 @@ class MainActivity : ComponentActivity() {
                                 project.clips.filter { it.track == 0 }.sumOf { it.timelineDurationMs() },
                                 project.clips.filter { it.track != 0 }.maxOfOrNull { it.positionMs + it.timelineDurationMs() } ?: 0L
                             )
-                            var previewPlaying by remember(selected) { mutableStateOf(false) }
                             val previewPlayer = remember(previewClip?.uri, previewClip?.startMs, previewClip?.endMs) {
                                 previewClip?.takeIf { it.kind == "video" || it.kind == "audio" }?.let { clip ->
                                     ExoPlayer.Builder(this@MainActivity).build().apply {
