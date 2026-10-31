@@ -1,2 +1,2 @@
-Release request: v0.95.0-alpha
-Build 96 - responsive 9:16 editor and unified lavender buttons across layouts
+Release request: v0.96.0-alpha
+Build 97 - keep text-to-speech waveform at its actual audio duration when extending a text clip
