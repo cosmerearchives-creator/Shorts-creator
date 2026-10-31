@@ -1,2 +1,2 @@
-Release request: v0.92.0-alpha
-Build 93 - bounded per-project timeline Undo and Redo
+Release request: v0.93.0-alpha
+Build 94 - timeline media waveforms, generated speech PCM waveform fix, Undo/Redo compilation repair
