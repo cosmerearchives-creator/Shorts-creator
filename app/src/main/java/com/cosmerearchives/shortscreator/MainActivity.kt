@@ -2503,7 +2503,94 @@ internal fun cachedAudioPeaks(context: android.content.Context, uri: Uri): List<
     }
 }
 
+/** Android's TTS engine writes uncompressed PCM WAV. Sample it directly, since
+ * MediaCodec decoders aren't available for audio/raw on every Android device. */
+internal fun extractPcmWavPeaks(context: android.content.Context, uri: Uri): List<Float> {
+    return try {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val header = ByteArray(12)
+            if (input.read(header) != 12 ||
+                String(header, 0, 4, Charsets.US_ASCII) != "RIFF" ||
+                String(header, 8, 4, Charsets.US_ASCII) != "WAVE") return emptyList()
+            fun u16(bytes: ByteArray, index: Int): Int =
+                (bytes[index].toInt() and 255) or ((bytes[index + 1].toInt() and 255) shl 8)
+            fun u32(bytes: ByteArray, index: Int): Long =
+                (u16(bytes, index).toLong() or (u16(bytes, index + 2).toLong() shl 16))
+            fun skipFully(bytes: Long): Boolean {
+                var remaining = bytes
+                val discard = ByteArray(8192)
+                while (remaining > 0) {
+                    val count = input.read(discard, 0, minOf(discard.size.toLong(), remaining).toInt())
+                    if (count <= 0) return false
+                    remaining -= count
+                }
+                return true
+            }
+            var channels = 0
+            var sampleRate = 0
+            var bits = 0
+            var pcm = false
+            while (true) {
+                val chunk = ByteArray(8)
+                if (input.read(chunk) != 8) break
+                val name = String(chunk, 0, 4, Charsets.US_ASCII)
+                val size = u32(chunk, 4)
+                if (name == "fmt ") {
+                    if (size < 16 || size > 1024) return emptyList()
+                    val info = ByteArray(size.toInt())
+                    if (input.read(info) != info.size) return emptyList()
+                    pcm = u16(info, 0) == 1
+                    channels = u16(info, 2)
+                    sampleRate = u32(info, 4).toInt()
+                    bits = u16(info, 14)
+                } else if (name == "data") {
+                    if (!pcm || channels <= 0 || sampleRate <= 0 || bits != 16) return emptyList()
+                    val frameBytes = channels * 2
+                    val frameCount = size / frameBytes
+                    if (frameCount <= 0L) return emptyList()
+                    val peaks = FloatArray(384)
+                    val buffer = ByteArray(8192)
+                    var remaining = size
+                    var frame = 0L
+                    var carry = ByteArray(0)
+                    while (remaining > 0) {
+                        val read = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                        if (read <= 0) break
+                        remaining -= read
+                        val block = if (carry.isEmpty()) buffer.copyOf(read)
+                            else carry + buffer.copyOf(read)
+                        val complete = block.size / frameBytes * frameBytes
+                        var offset = 0
+                        while (offset < complete) {
+                            var amplitude = 0f
+                            for (channel in 0 until channels) {
+                                val at = offset + channel * 2
+                                val raw = (block[at].toInt() and 255) or (block[at + 1].toInt() shl 8)
+                                amplitude = maxOf(amplitude, kotlin.math.abs(raw.toShort().toInt()) / 32768f)
+                            }
+                            val bin = ((frame.toDouble() / frameCount) * peaks.size).toInt().coerceIn(0, peaks.lastIndex)
+                            peaks[bin] = maxOf(peaks[bin], amplitude)
+                            frame++
+                            offset += frameBytes
+                        }
+                        carry = block.copyOfRange(complete, block.size)
+                    }
+                    return if (frame > 0) peaks.toList() else emptyList()
+                } else if (!skipFully(size)) break
+                if (size % 2L != 0L && !skipFully(1)) break
+            }
+            emptyList()
+        } ?: emptyList()
+    } catch (_: Exception) { emptyList() }
+}
+
 internal fun extractAudioPeaks(context: android.content.Context, uri: Uri): List<Float> {
+    // The generated speech files use file:// WAV URIs and uncompressed PCM16 data.
+    // Handle those without requiring an audio/raw MediaCodec decoder.
+    if (uri.toString().endsWith(".wav", ignoreCase = true)) {
+        val wav = extractPcmWavPeaks(context, uri)
+        if (wav.isNotEmpty()) return wav
+    }
     val extractor = MediaExtractor()
     try {
         extractor.setDataSource(context, uri, null)
