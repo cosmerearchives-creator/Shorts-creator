@@ -1,2 +1,2 @@
-Release request: v0.94.0-alpha
-Build 95 - drag text and image right edges for direct timeline duration editing
+Release request: v0.95.0-alpha
+Build 96 - responsive 9:16 editor and unified lavender buttons across layouts
