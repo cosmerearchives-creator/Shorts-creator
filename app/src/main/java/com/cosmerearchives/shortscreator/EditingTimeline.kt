@@ -264,15 +264,21 @@ fun EditingTimeline(
                             // Use the source's full duration for accurate trim offsets. The waveform
                             // is based on the unmodified source, not the on-screen clip length.
                             val sourceDuration = waveform?.first?.coerceAtLeast(1L) ?: 1L
-                            val sourceEnd = clip.endMs.coerceAtMost(sourceDuration)
-                            val sourceStart = clip.startMs.coerceAtLeast(0L)
-                            val bars = ((w / 3.dp.toPx()).toInt()).coerceIn(1, 240)
-                            val barWidth = w / bars
-                            clipRect(x, 8.dp.toPx(), x + w, 52.dp.toPx()) {
-                                for (bar in 0 until bars) {
-                                    val fraction = (bar + 0.5f) / bars
-                                    val time = sourceStart + ((sourceEnd - sourceStart) * fraction).toLong()
-                                    val index = ((time.toDouble() / sourceDuration) * peaks.size)
+                            val sourceStart = if (clip.kind == "text") 0L else clip.startMs.coerceAtLeast(0L)
+                             val sourceEnd = if (clip.kind == "text") sourceDuration else clip.endMs.coerceAtMost(sourceDuration)
+                             // Generated speech does not stretch when the visual text clip is extended.
+                             // Keep waveform bars at their true timeline positions, leaving silence empty.
+                             val audibleMs = if (clip.kind == "text") minOf(durations[i], sourceDuration) else durations[i]
+                             val waveformWidth = if (clip.kind == "text") {
+                                 (w * audibleMs.toFloat() / durations[i].coerceAtLeast(1L)).coerceIn(0f, w)
+                             } else w
+                             val bars = ((waveformWidth / 3.dp.toPx()).toInt()).coerceIn(1, 240)
+                             val barWidth = waveformWidth / bars
+                             clipRect(x, 8.dp.toPx(), x + waveformWidth, 52.dp.toPx()) {
+                                 for (bar in 0 until bars) {
+                                     val fraction = (bar + 0.5f) / bars
+                                     val time = sourceStart + ((sourceEnd - sourceStart) * fraction).toLong()
+                                     val index = ((time.toDouble() / sourceDuration) * peaks.size)
                                         .toInt().coerceIn(0, peaks.lastIndex)
                                     val amplitude = peaks[index].coerceIn(0f, 1f)
                                     val halfHeight = (amplitude * 16.dp.toPx()).coerceAtLeast(1.dp.toPx())
