@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellati
 import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.gestures.rememberScrollableState
@@ -176,7 +177,21 @@ fun EditingTimeline(
                 old - scrollPx
             }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clipToBounds()) {
-            Canvas(Modifier.fillMaxWidth().height(32.dp).clipToBounds().scrollable(scrollState, Orientation.Horizontal).pointerInput(total, zoom) {
+            Canvas(Modifier.fillMaxWidth().height(32.dp).clipToBounds()
+                .pointerInput(total, zoom) {
+                    detectTransformGestures { centroid, _, zoomChange, _ ->
+                        if (zoomChange != 1f) {
+                            val oldPxPerMs = with(density) { (PX_PER_SECOND_DP * zoom).dp.toPx() } / 1000f
+                            val anchoredTime = ((scrollPx + centroid.x - leftPx) / oldPxPerMs).coerceAtLeast(0f)
+                            val updatedZoom = (zoom * zoomChange).coerceIn(MIN_ZOOM, 8f)
+                            val updatedPxPerMs = with(density) { (PX_PER_SECOND_DP * updatedZoom).dp.toPx() } / 1000f
+                            val newMaxScroll = (leftPx + total * updatedPxPerMs + 25.dp.toPx() - viewportPx).coerceAtLeast(0f)
+                            scrollPx = (anchoredTime * updatedPxPerMs + leftPx - centroid.x).coerceIn(0f, newMaxScroll)
+                            zoom = updatedZoom
+                        }
+                    }
+                }
+                .scrollable(scrollState, Orientation.Horizontal).pointerInput(total, zoom) {
                 detectTapGestures { tap -> onScrub(((tap.x + visibleScroll.value - leftPx) / pxPerMs).toLong().coerceIn(0, total)) }
             }) {
                 drawRect(timelineDark)
@@ -203,7 +218,8 @@ fun EditingTimeline(
                 drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
             }
             lanes.forEach { (lane, label) ->
-                Canvas(Modifier.fillMaxWidth().height(61.dp).clipToBounds().pointerInput(lane, zoom, snappingEnabled) {
+                Canvas(Modifier.fillMaxWidth().height(61.dp).clipToBounds()
+                    .scrollable(scrollState, Orientation.Horizontal).pointerInput(lane, zoom, snappingEnabled) {
                     awaitEachGesture {
                         val clips = liveClips.value
                         val positions = livePositions.value
