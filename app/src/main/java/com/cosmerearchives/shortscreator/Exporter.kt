@@ -318,7 +318,7 @@ object Exporter {
             builder.addItem(EditedMediaItem.Builder(item).build())
             sequences.add(builder.build())
         }
-        val pipVideos = visualOverlays.filter { it.kind == "video" }
+        val pipVideos = visualOverlays.filter { it.kind == "video" }.sortedBy { it.layerOrder }
         pipVideos.forEach { clip ->
             require(clip.endMs > clip.startMs) { "Video overlay has no valid duration" }
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
