@@ -355,7 +355,7 @@ fun EditingTimeline(
                                     val amplitude = peaks[index].coerceIn(0f, 1f)
                                     val halfHeight = (amplitude * 16.dp.toPx()).coerceAtLeast(1.dp.toPx())
                                     val barX = x + (bar + 0.5f) * barWidth
-                                    drawLine(Color.White.copy(alpha = if (i == selectedIndex) 0.68f else 0.43f),
+                                    drawLine(Color.White.copy(alpha = if (i == selectedIndex) 0.95f else 0.8f),
                                         Offset(barX, 30.dp.toPx() - halfHeight),
                                         Offset(barX, 30.dp.toPx() + halfHeight),
                                         strokeWidth = (barWidth * 0.6f).coerceAtLeast(1f))
