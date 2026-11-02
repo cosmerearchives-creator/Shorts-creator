@@ -148,14 +148,17 @@ object Exporter {
                     override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
                         val timeMs = segmentStart + presentationTimeUs / 1000L
                         val visible = timeMs >= image.positionMs && timeMs < image.positionMs + image.timelineDurationMs()
+                        val progress = ((timeMs - image.positionMs).toFloat() / 500f).coerceIn(0f, 1f)
+                        val entranceAlpha = if (image.kind == "text" && image.textAnimation == "Fade") progress else 1f
+                        val entranceScale = if (image.kind == "text" && image.textAnimation == "Pop") 0.6f + progress * 0.4f else 1f
                         return StaticOverlaySettings.Builder()
-                            .setAlphaScale(if (!visible) 0f else if (image.transition == "Fade in/out") {
+                            .setAlphaScale(entranceAlpha * (if (!visible) 0f else if (image.transition == "Fade in/out") {
                                 val elapsed = (timeMs - image.positionMs).coerceAtLeast(0L)
                                 val length = image.timelineDurationMs().coerceAtLeast(1L)
                                 val fade = minOf(image.fadeDurationMs.coerceIn(100L, 3000L), length / 3).coerceAtLeast(1L)
                                 minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
-                            } else 1f)
-                            .setScale(if (image.kind == "image") image.imageScale else 1f, if (image.kind == "image") image.imageScale else 1f)
+                            } else 1f))
+                            .setScale(if (image.kind == "image") image.imageScale else entranceScale, if (image.kind == "image") image.imageScale else entranceScale)
                             .setBackgroundFrameAnchor(when (image.kind) { "text" -> image.textX; "image" -> image.imageX; else -> 0f }, when (image.kind) { "text" -> image.textY; "image" -> image.imageY; else -> 0f })
                             .build()
                     }
