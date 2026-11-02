@@ -1,2 +1,2 @@
-Release request: v1.05.0-alpha
-Build 106 - expanded timeline zoom out to 2.5 percent and readable HH:MM:SS timeline labels
+Release request: v1.06.0-alpha
+Build 107 - toggleable timeline snapping and prevention of duplicate exports while processing
