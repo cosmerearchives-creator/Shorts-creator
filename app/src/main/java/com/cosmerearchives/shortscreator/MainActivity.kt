@@ -53,6 +53,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.effect.GaussianBlur
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -565,6 +567,41 @@ class MainActivity : ComponentActivity() {
                             }
                             var previewSize by remember { mutableStateOf(IntSize.Zero) }
                             val frameContext = LocalContext.current
+                            val usePortraitFill = project.ratio == "9:16" && previewClip?.kind == "video" && previewClip.portraitFill &&
+                                remember(previewClip.uri) {
+                                    try {
+                                        val retriever = MediaMetadataRetriever()
+                                        try {
+                                            retriever.setDataSource(this@MainActivity, Uri.parse(previewClip.uri))
+                                            val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                                            val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                                            val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                                            if (rotation % 180 == 0) w > h else h > w
+                                        } finally { retriever.release() }
+                                    } catch (_: Exception) { false }
+                                }
+                            val fillPlayer = remember(previewPlayer, usePortraitFill) {
+                                if (!usePortraitFill || previewClip == null) null else ExoPlayer.Builder(this@MainActivity).build().apply {
+                                    setMediaItem(MediaItem.Builder().setUri(Uri.parse(previewClip.uri))
+                                        .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                                            .setStartPositionMs(previewClip.startMs).setEndPositionMs(previewClip.endMs).build()).build())
+                                    volume = 0f
+                                    setVideoEffects(listOf(GaussianBlur(22f)))
+                                    prepare()
+                                }
+                            }
+                            LaunchedEffect(fillPlayer, previewPlayer, previewPlaying, previewClip?.clipSpeed) {
+                                fillPlayer?.let { bg ->
+                                    bg.setPlaybackSpeed(previewClip?.clipSpeed ?: 1f)
+                                    bg.playWhenReady = previewPlaying
+                                    while (true) {
+                                        val reference = previewPlayer?.currentPosition ?: 0L
+                                        if (kotlin.math.abs(bg.currentPosition - reference) > 100L) bg.seekTo(reference)
+                                        kotlinx.coroutines.delay(150L)
+                                    }
+                                }
+                            }
+                            DisposableEffect(fillPlayer) { onDispose { fillPlayer?.release() } }
                             val previewRatio = when (project.ratio) {
                                 "9:16" -> 9f / 16f
                                 "1:1" -> 1f
@@ -578,14 +615,26 @@ class MainActivity : ComponentActivity() {
                             Box(Modifier.weight(1.08f).aspectRatio(previewRatio).background(dark, RoundedCornerShape(16.dp))
                                 .onSizeChanged { previewSize = it }) {
                                 if (previewClip != null && previewClip.kind == "video") {
+                                    if (usePortraitFill && fillPlayer != null) {
+                                        AndroidView(
+                                            factory = { ctx -> PlayerView(ctx).apply {
+                                                player = fillPlayer
+                                                useController = false
+                                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                            } },
+                                            update = { view -> view.player = fillPlayer },
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
                                     AndroidView(
                                         factory = { ctx -> PlayerView(ctx).apply {
                                             player = previewPlayer
                                             useController = false
+                                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                                             setKeepContentOnPlayerReset(true)
                                         } },
                                         update = { view -> view.player = previewPlayer },
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = if (usePortraitFill) Modifier.fillMaxWidth().aspectRatio(16f / 9f).align(Alignment.Center) else Modifier.fillMaxSize()
                                     )
                                 } else if (previewClip?.kind == "audio") {
                                     EqualizerPreview(playheadMs - previewStart, Modifier.fillMaxSize())
