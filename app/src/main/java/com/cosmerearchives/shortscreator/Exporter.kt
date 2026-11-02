@@ -337,6 +337,7 @@ object Exporter {
                     StaticOverlaySettings.Builder().build()
                 } else if (inputId >= pipStart && pipVideos.isNotEmpty()) {
                     StaticOverlaySettings.Builder()
+                        .setAlphaScale(pipVideos[inputId - pipStart].layerOpacity.coerceIn(0f, 1f))
                         .setScale(pipVideos[inputId - pipStart].pipScale, pipVideos[inputId - pipStart].pipScale)
                         .setOverlayFrameAnchor(0f, 0f)
                         .setBackgroundFrameAnchor(pipVideos[inputId - pipStart].pipX, pipVideos[inputId - pipStart].pipY)
