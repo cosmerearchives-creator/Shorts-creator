@@ -198,7 +198,7 @@ object Exporter {
                             val bin = ((elapsed.toDouble() / duration) * peaks.size).toInt()
                                 .coerceIn(0, (peaks.size - 1).coerceAtLeast(0))
                             OrbitalScribble.draw(canvas, bitmap.width.toFloat(), bitmap.height.toFloat(),
-                                elapsed, peaks.getOrNull(bin) ?: 0f)
+                                elapsed, peaks.getOrNull(bin) ?: 0f, text.visualizerSensitivity)
                         }
                         return bitmap
                     }
