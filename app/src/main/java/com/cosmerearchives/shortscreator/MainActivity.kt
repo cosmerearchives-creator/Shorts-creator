@@ -1153,6 +1153,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                             Spacer(Modifier.height(10.dp))
+                            var showEditHistory by remember(project.id) { mutableStateOf(false) }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("Tools", style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -1172,6 +1173,30 @@ class MainActivity : ComponentActivity() {
                                         restoreTimeline(stack.last())
                                     }
                                 }) { Icon(Icons.Default.Redo, "Redo"); Text("Redo") }
+                                TextButton(onClick = { showEditHistory = !showEditHistory }) {
+                                    Text("History")
+                                }
+                            }
+                            if (showEditHistory) {
+                                val previous = undoHistory[project.id].orEmpty()
+                                val upcoming = redoHistory[project.id].orEmpty()
+                                Column(Modifier.fillMaxWidth().heightIn(max = 240.dp)
+                                    .verticalScroll(rememberScrollState())) {
+                                    Text("Current • ${project.clips.size} clips", style = MaterialTheme.typography.labelMedium)
+                                    previous.indices.reversed().forEach { index ->
+                                        val snapshot = previous[index]
+                                        TextButton(onClick = {
+                                            val skipped = previous.drop(index + 1) + project
+                                            undoHistory[project.id] = previous.take(index)
+                                            redoHistory[project.id] = (upcoming + skipped.reversed()).takeLast(40)
+                                            restoreTimeline(snapshot)
+                                        }) {
+                                            Text("Restore step ${index + 1} • ${snapshot.clips.size} clips")
+                                        }
+                                    }
+                                    if (upcoming.isNotEmpty()) Text("${upcoming.size} redo steps available",
+                                        style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                             val toolItems = listOf(
                                 Triple("Move left", Icons.Default.ArrowBack, true),
