@@ -1,3 +1,3 @@
-Release request: v1.11.0-beta
-Build 112 - Orbital Scribble customizable color, size and motion speed for TTS preview and export
-Fallback remains fallback/v1.09.0-alpha-build-110
+Release request: v1.12.0-beta
+Build 113 - Fade/Pop text entrance animation and previous-text styling reuse in preview and export
+Fallback preserved at fallback/v1.09.0-alpha-build-110
