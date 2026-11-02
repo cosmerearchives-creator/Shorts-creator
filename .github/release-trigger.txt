@@ -1,2 +1,2 @@
-Release request: v1.03.0-alpha
-Build 104 - TTS text-only video with Orbital Scribble audio-reactive background and subtitles
+Release request: v1.04.0-alpha
+Build 105 - audio trim in out and duration display HH:MM:SS.ss timecode
