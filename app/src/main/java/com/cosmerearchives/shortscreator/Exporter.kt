@@ -12,6 +12,7 @@ import androidx.media3.common.audio.ChannelMixingAudioProcessor
 import androidx.media3.common.audio.ChannelMixingMatrix
 import androidx.media3.effect.RgbFilter
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.GaussianBlur
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.StaticOverlaySettings
@@ -48,6 +49,20 @@ object Exporter {
         return result
     }
 
+    private fun needsPortraitFill(context: Context, clip: Clip, ratio: String): Boolean {
+        if (ratio != "9:16" || clip.kind != "video" || !clip.portraitFill) return false
+        return try {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, Uri.parse(clip.uri))
+                val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                if (rotation % 180 == 0) width > height else height > width
+            } finally { retriever.release() }
+        } catch (_: Exception) { false }
+    }
+
     fun exportTimeline(context: Context, clips: List<Clip>, ratio: String, callback: (String) -> Unit) {
         val (outputWidth, outputHeight) = exportDimensions(ratio)
         val presentation = Presentation.createForWidthAndHeight(outputWidth, outputHeight, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP)
@@ -75,6 +90,7 @@ object Exporter {
             "Timeline export currently supports trimmed video clips on the main track only"
         }
         val output = File(context.cacheDir, "timeline-${System.currentTimeMillis()}.mp4")
+        val fillFlags = main.map { needsPortraitFill(context, it, ratio) }
         val visualOverlays = clips.filter { it.track == 1 }
         require(visualOverlays.all { it.kind == "image" || it.kind == "video" || it.kind == "text" }) { "Unsupported visual overlay" }
         val images = visualOverlays.filter { it.kind == "image" }.map { item ->
@@ -174,13 +190,34 @@ object Exporter {
                         }
                     }
                 ) else emptyList(),
-                listOf(presentation) + (if (clip.videoFilter == "Grayscale") listOf(RgbFilter.createGrayscaleFilter()) else emptyList()) + effects
+                (if (fillFlags[index]) listOf(GaussianBlur(22f)) else emptyList()) + listOf(presentation) + (if (clip.videoFilter == "Grayscale") listOf(RgbFilter.createGrayscaleFilter()) else emptyList()) + effects
             )).build()
         }
+        // An independent video-only sequence restores the unblurred source over the
+        // expanded blurred background. Audio stays solely on the main sequence.
+        val foregroundSequence = if (fillFlags.any { it }) {
+            val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
+            main.forEachIndexed { index, clip ->
+                val item = MediaItem.Builder().setUri(Uri.parse(clip.uri))
+                    .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
+                builder.addItem(EditedMediaItem.Builder(item).setRemoveAudio(true).apply {
+                    if (clip.clipSpeed != 1f) setSpeed(object : SpeedProvider {
+                        override fun getSpeed(timeUs: Long): Float = clip.clipSpeed.coerceIn(0.5f, 2f)
+                        override fun getNextSpeedChangeTimeUs(timeUs: Long): Long = C.TIME_UNSET
+                    })
+                }.setEffects(Effects(emptyList(), listOf(
+                    Presentation.createForWidthAndHeight(outputWidth, outputHeight, Presentation.LAYOUT_SCALE_TO_FIT)
+                ))).build())
+            }
+            builder.build()
+        } else null
         val mainSequence = if (overlayOnly) EditedMediaItemSequence.withVideoFrom(edits)
             else EditedMediaItemSequence.withAudioAndVideoFrom(edits)
         val audio = clips.filter { it.track == 2 && it.kind == "audio" }
         val sequences = mutableListOf(mainSequence)
+        val foregroundIndex = if (foregroundSequence != null) sequences.size else -1
+        if (foregroundSequence != null) sequences.add(foregroundSequence)
         audio.forEach { clip ->
             require(clip.endMs > clip.startMs) { "Audio needs a known duration before timeline export" }
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
@@ -228,7 +265,9 @@ object Exporter {
         val compositor = object : VideoCompositorSettings {
             override fun getOutputSize(inputSizes: List<Size>): Size = Size(outputWidth, outputHeight)
             override fun getOverlaySettings(inputId: Int, presentationTimeUs: Long): androidx.media3.common.OverlaySettings =
-                if (inputId >= pipStart && pipVideos.isNotEmpty()) {
+                if (inputId == foregroundIndex && foregroundIndex >= 0) {
+                    StaticOverlaySettings.Builder().build()
+                } else if (inputId >= pipStart && pipVideos.isNotEmpty()) {
                     StaticOverlaySettings.Builder()
                         .setScale(pipVideos[inputId - pipStart].pipScale, pipVideos[inputId - pipStart].pipScale)
                         .setOverlayFrameAnchor(0f, 0f)
