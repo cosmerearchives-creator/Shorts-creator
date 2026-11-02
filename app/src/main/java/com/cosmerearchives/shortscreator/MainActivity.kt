@@ -680,6 +680,19 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.align(Alignment.Center))
                                     }
                                 }
+                                if (project.clips.none { it.track == 0 }) {
+                                    val visualizerText = project.clips.firstOrNull { text ->
+                                        text.track == 1 && text.kind == "text" && text.ttsVisualizer &&
+                                            text.ttsUri.isNotBlank() &&
+                                            playheadMs >= text.positionMs &&
+                                            playheadMs < text.positionMs + text.timelineDurationMs()
+                                    }
+                                    if (visualizerText != null) {
+                                        EqualizerPreview(playheadMs - visualizerText.positionMs,
+                                            visualizerText.ttsUri, 0L, visualizerText.timelineDurationMs(),
+                                            Modifier.fillMaxSize())
+                                    }
+                                }
                                 // The current clip's incoming/outgoing fade is rendered over the editor preview.
                                 val mainVideoClips = project.clips.filter { it.track == 0 && it.kind == "video" }
                                 val activeMainIndex = mainVideoClips.indexOfFirst { it === previewClip }
@@ -860,6 +873,19 @@ class MainActivity : ComponentActivity() {
                                     if (project.clips.none { it.track == 1 }) {
                                         Text("Add media or text to preview", color = Color.White,
                                             modifier = Modifier.align(Alignment.Center))
+                                    }
+                                }
+                                if (project.clips.none { it.track == 0 }) {
+                                    val visualizerText = project.clips.firstOrNull { text ->
+                                        text.track == 1 && text.kind == "text" && text.ttsVisualizer &&
+                                            text.ttsUri.isNotBlank() &&
+                                            playheadMs >= text.positionMs &&
+                                            playheadMs < text.positionMs + text.timelineDurationMs()
+                                    }
+                                    if (visualizerText != null) {
+                                        EqualizerPreview(playheadMs - visualizerText.positionMs,
+                                            visualizerText.ttsUri, 0L, visualizerText.timelineDurationMs(),
+                                            Modifier.fillMaxSize())
                                     }
                                 }
                                 // The current clip's incoming/outgoing fade is rendered over the editor preview.
