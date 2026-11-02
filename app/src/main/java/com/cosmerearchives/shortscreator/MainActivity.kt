@@ -1180,6 +1180,19 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                            if (project.ratio == "9:16" && currentClip?.kind == "video" && currentClip.track == 0) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Crop + blurred fill", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                                    Switch(checked = currentClip.portraitFill, onCheckedChange = { enabled ->
+                                        val updated = projects.toMutableList()
+                                        val clips = project.clips.toMutableList()
+                                        clips[activeClip] = currentClip.copy(portraitFill = enabled)
+                                        updated[selected] = project.copy(clips = clips)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    })
+                                }
+                            }
                             if (adjustment == "Trim" && currentClip != null && currentClip.kind in listOf("image", "text")) {
                                 AlertDialog(onDismissRequest = { adjustment = null },
                                     title = { Text("Clip duration and timing") },
