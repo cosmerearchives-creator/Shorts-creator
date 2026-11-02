@@ -70,7 +70,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f, val transition: String = "None", val fadeDurationMs: Long = 400L, val portraitFill: Boolean = true, val ttsOriginalUri: String = "", val voiceEffect: String = "Normal", val voiceIntensity: Float = 0.7f, val wobbleRate: Float = 4f, val wobbleGrit: Float = 0.25f, val ttsVisualizer: Boolean = true, val visualizerSensitivity: Float = 1f, val visualizerColor: Int = 0xFFE1CFFA.toInt(), val visualizerSize: Float = 1f, val visualizerMotion: Float = 1f, val textAnimation: String = "None", val duckUnderTts: Boolean = true, val layerOpacity: Float = 1f)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f, val transition: String = "None", val fadeDurationMs: Long = 400L, val portraitFill: Boolean = true, val ttsOriginalUri: String = "", val voiceEffect: String = "Normal", val voiceIntensity: Float = 0.7f, val wobbleRate: Float = 4f, val wobbleGrit: Float = 0.25f, val ttsVisualizer: Boolean = true, val visualizerSensitivity: Float = 1f, val visualizerColor: Int = 0xFFE1CFFA.toInt(), val visualizerSize: Float = 1f, val visualizerMotion: Float = 1f, val textAnimation: String = "None", val duckUnderTts: Boolean = true, val layerOpacity: Float = 1f, val layerOrder: Int = 0)
 /** Duration in final timeline after offline speed processing. */
 fun Clip.timelineDurationMs(): Long = ((endMs - startMs).coerceAtLeast(0L) /
     (if (kind == "video" || kind == "audio") clipSpeed.coerceIn(0.5f, 2f) else 1f)).toLong()
@@ -799,7 +799,9 @@ class MainActivity : ComponentActivity() {
                                         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = opacity)))
                                     }
                                 }
-                                project.clips.forEachIndexed { clipIndex, overlay ->
+                                project.clips.withIndex().sortedWith(compareBy<IndexedValue<Clip>> {
+                                    if (it.value.track == 1) it.value.layerOrder else 0
+                                }.thenBy { it.index }).forEach { (clipIndex, overlay) ->
                                     val overlayFade = if (overlay.transition == "Fade in/out") {
                                         val elapsed = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
                                         val length = overlay.timelineDurationMs().coerceAtLeast(1L)
@@ -999,7 +1001,9 @@ class MainActivity : ComponentActivity() {
                                         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = opacity)))
                                     }
                                 }
-                                project.clips.forEachIndexed { clipIndex, overlay ->
+                                project.clips.withIndex().sortedWith(compareBy<IndexedValue<Clip>> {
+                                    if (it.value.track == 1) it.value.layerOrder else 0
+                                }.thenBy { it.index }).forEach { (clipIndex, overlay) ->
                                     val overlayFade = if (overlay.transition == "Fade in/out") {
                                         val elapsed = (playheadMs - overlay.positionMs).coerceAtLeast(0L)
                                         val length = (overlay.endMs - overlay.startMs).coerceAtLeast(1L)
@@ -2101,6 +2105,25 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             if (currentClip?.kind == "video" && currentClip.track == 1) {
+                                Text("Layer order: ${currentClip.layerOrder}")
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = {
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(layerOrder = (currentClip.layerOrder - 1).coerceAtLeast(-20))
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }) { Text("Send backward") }
+                                    TextButton(onClick = {
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(layerOrder = (currentClip.layerOrder + 1).coerceAtMost(20))
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }) { Text("Bring forward") }
+                                }
                                 Text("Layer opacity: ${(currentClip.layerOpacity * 100).toInt()}%")
                                 Slider(value = currentClip.layerOpacity.coerceIn(0f, 1f),
                                     valueRange = 0f..1f, onValueChange = { alpha ->
@@ -2462,7 +2485,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat(), c.optDouble("clipSpeed", 1.0).toFloat(), c.optString("transition", "None"), c.optLong("fadeDurationMs", 400L), c.optBoolean("portraitFill", true), c.optString("ttsOriginalUri", ""), c.optString("voiceEffect", "Normal"), c.optDouble("voiceIntensity", 0.7).toFloat(), c.optDouble("wobbleRate", 4.0).toFloat(), c.optDouble("wobbleGrit", 0.25).toFloat(), c.optBoolean("ttsVisualizer", true), c.optDouble("visualizerSensitivity", 1.0).toFloat(), c.optInt("visualizerColor", 0xFFE1CFFA.toInt()), c.optDouble("visualizerSize", 1.0).toFloat(), c.optDouble("visualizerMotion", 1.0).toFloat(), c.optString("textAnimation", "None"), c.optBoolean("duckUnderTts", true), c.optDouble("layerOpacity", 1.0).toFloat())
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat(), c.optDouble("clipSpeed", 1.0).toFloat(), c.optString("transition", "None"), c.optLong("fadeDurationMs", 400L), c.optBoolean("portraitFill", true), c.optString("ttsOriginalUri", ""), c.optString("voiceEffect", "Normal"), c.optDouble("voiceIntensity", 0.7).toFloat(), c.optDouble("wobbleRate", 4.0).toFloat(), c.optDouble("wobbleGrit", 0.25).toFloat(), c.optBoolean("ttsVisualizer", true), c.optDouble("visualizerSensitivity", 1.0).toFloat(), c.optInt("visualizerColor", 0xFFE1CFFA.toInt()), c.optDouble("visualizerSize", 1.0).toFloat(), c.optDouble("visualizerMotion", 1.0).toFloat(), c.optString("textAnimation", "None"), c.optBoolean("duckUnderTts", true), c.optDouble("layerOpacity", 1.0).toFloat(), c.optInt("layerOrder", 0))
             }, obj.optString("id", "legacy-project-$i"))
         }
     }
@@ -2494,7 +2517,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble()).put("clipSpeed", c.clipSpeed.toDouble()).put("transition", c.transition).put("fadeDurationMs", c.fadeDurationMs).put("portraitFill", c.portraitFill).put("ttsOriginalUri", c.ttsOriginalUri).put("voiceEffect", c.voiceEffect).put("voiceIntensity", c.voiceIntensity.toDouble()).put("wobbleRate", c.wobbleRate.toDouble()).put("wobbleGrit", c.wobbleGrit.toDouble()).put("ttsVisualizer", c.ttsVisualizer).put("visualizerSensitivity", c.visualizerSensitivity.toDouble()).put("visualizerColor", c.visualizerColor).put("visualizerSize", c.visualizerSize.toDouble()).put("visualizerMotion", c.visualizerMotion.toDouble()).put("textAnimation", c.textAnimation).put("duckUnderTts", c.duckUnderTts).put("layerOpacity", c.layerOpacity.toDouble())) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble()).put("clipSpeed", c.clipSpeed.toDouble()).put("transition", c.transition).put("fadeDurationMs", c.fadeDurationMs).put("portraitFill", c.portraitFill).put("ttsOriginalUri", c.ttsOriginalUri).put("voiceEffect", c.voiceEffect).put("voiceIntensity", c.voiceIntensity.toDouble()).put("wobbleRate", c.wobbleRate.toDouble()).put("wobbleGrit", c.wobbleGrit.toDouble()).put("ttsVisualizer", c.ttsVisualizer).put("visualizerSensitivity", c.visualizerSensitivity.toDouble()).put("visualizerColor", c.visualizerColor).put("visualizerSize", c.visualizerSize.toDouble()).put("visualizerMotion", c.visualizerMotion.toDouble()).put("textAnimation", c.textAnimation).put("duckUnderTts", c.duckUnderTts).put("layerOpacity", c.layerOpacity.toDouble()).put("layerOrder", c.layerOrder)) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("id", p.id).put("clips", clips))
         }
         val serialized = arr.toString()
