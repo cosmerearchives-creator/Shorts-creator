@@ -1,2 +1,2 @@
-Release request: v1.02.0-alpha
-Build 103 - fix audio visualizer Kotlin function arguments in nonportrait editor
+Release request: v1.03.0-alpha
+Build 104 - TTS text-only video with Orbital Scribble audio-reactive background and subtitles
