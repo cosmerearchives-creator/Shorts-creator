@@ -1,2 +1,2 @@
-Release request: v0.98.0-alpha
-Build 99 - transparent foreground video for blurred portrait fill and visible export progress/errors
+Release request: v0.99.0-alpha
+Build 100 - correct blurred-fill compositor layer order and use texture background in portrait preview
