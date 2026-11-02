@@ -591,12 +591,12 @@ class MainActivity : ComponentActivity() {
                             DisposableEffect(speechPlayers) {
                                 onDispose { speechPlayers.values.forEach { it.release() } }
                             }
-                            LaunchedEffect(speechPlayers, previewPlaying, playheadMs / 100L) {
+                            LaunchedEffect(speechPlayers, previewPlaying, playheadMs / 100L, speechOverlays) {
                                 speechOverlays.forEach { textClip ->
                                     val speechPlayer = speechPlayers[textClip.ttsUri] ?: return@forEach
                                     val relative = playheadMs - textClip.positionMs
                                     val active = previewPlaying && relative >= 0L &&
-                                        relative < (textClip.endMs - textClip.startMs)
+                                        relative < textClip.timelineDurationMs()
                                     if (active) {
                                         if (kotlin.math.abs(speechPlayer.currentPosition - relative) > 300L) {
                                             speechPlayer.seekTo(relative)
@@ -622,10 +622,13 @@ class MainActivity : ComponentActivity() {
                             val backgroundClips = remember(project.clips) {
                                 project.clips.filter { it.track == 2 && it.kind == "audio" && it.uri.isNotBlank() }
                             }
-                            val backgroundPlayers = remember(project.id, backgroundClips) {
+                            val backgroundPlayers = remember(project.id, backgroundClips.map { Triple(it.uri, it.startMs, it.endMs) }) {
                                 backgroundClips.map { clip ->
                                     ExoPlayer.Builder(this@MainActivity).build().apply {
-                                        setMediaItem(MediaItem.fromUri(Uri.parse(clip.uri)))
+                                        setMediaItem(MediaItem.Builder().setUri(Uri.parse(clip.uri))
+                                            .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                                                .setStartPositionMs(clip.startMs)
+                                                .setEndPositionMs(clip.endMs).build()).build())
                                         prepare()
                                     }
                                 }
@@ -642,9 +645,12 @@ class MainActivity : ComponentActivity() {
                                     val active = previewPlaying && relative >= 0L &&
                                         relative < clip.timelineDurationMs()
                                     if (active) {
-                                        val expected = clip.startMs +
-                                            (relative * clip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
-                                        if (kotlin.math.abs(player.currentPosition - expected) > 300L) {
+                                        val speed = clip.clipSpeed.coerceIn(0.5f, 2f)
+                                        if (kotlin.math.abs(player.playbackParameters.speed - speed) > 0.01f) {
+                                            player.setPlaybackSpeed(speed)
+                                        }
+                                        val expected = (relative * speed).toLong()
+                                        if (kotlin.math.abs(player.currentPosition - expected) > 450L) {
                                             player.seekTo(expected)
                                         }
                                         val duck = if (clip.duckUnderTts) AudioDucking.gain(playheadMs, intervals) else 1f
