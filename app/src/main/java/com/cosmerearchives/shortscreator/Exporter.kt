@@ -269,8 +269,11 @@ object Exporter {
             require(clip.endMs > clip.startMs) { "Audio needs a known duration before timeline export" }
             val speed = clip.clipSpeed.coerceIn(0.5f, 2f)
             val timelineEnd = clip.positionMs + clip.timelineDurationMs()
-            val edges = (listOf(clip.positionMs, timelineEnd) +
-                (if (clip.duckUnderTts) spokenIntervals.flatMap { listOf(it.first, it.second) } else emptyList()))
+            val fadePoints = if (clip.duckUnderTts) spokenIntervals.flatMap { (start, end) ->
+                listOf(start - 250L, start - 200L, start - 150L, start - 100L, start - 50L,
+                    start, end, end + 50L, end + 100L, end + 150L, end + 200L, end + 250L)
+            } else emptyList()
+            val edges = (listOf(clip.positionMs, timelineEnd) + fadePoints)
                 .filter { it in clip.positionMs..timelineEnd }.distinct().sorted()
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
             if (clip.positionMs > 0) builder.addGap(clip.positionMs * 1000L)
@@ -284,8 +287,8 @@ object Exporter {
                     .coerceIn(clip.startMs, clip.endMs)
                 if (sourceTo <= sourceFrom) continue
                 val mid = from + (to - from) / 2
-                val speaking = clip.duckUnderTts && spokenIntervals.any { mid >= it.first && mid < it.second }
-                val level = clip.clipVolume.coerceIn(0f, 1f) * (if (speaking) 0.25f else 1f)
+                val duck = if (clip.duckUnderTts) AudioDucking.gain(mid, spokenIntervals) else 1f
+                val level = clip.clipVolume.coerceIn(0f, 1f) * duck
                 val item = MediaItem.Builder().setUri(Uri.parse(clip.uri))
                     .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                         .setStartPositionMs(sourceFrom).setEndPositionMs(sourceTo).build()).build()
