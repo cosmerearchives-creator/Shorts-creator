@@ -626,16 +626,32 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.fillMaxSize()
                                         )
                                     }
-                                    AndroidView(
-                                        factory = { ctx -> PlayerView(ctx).apply {
-                                            player = previewPlayer
-                                            useController = false
-                                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                            setKeepContentOnPlayerReset(true)
-                                        } },
-                                        update = { view -> view.player = previewPlayer },
-                                        modifier = if (usePortraitFill) Modifier.fillMaxWidth().aspectRatio(16f / 9f).align(Alignment.Center) else Modifier.fillMaxSize()
-                                    )
+                                    if (usePortraitFill) {
+                                        // PlayerView paints an opaque black surface outside the video.
+                                        // A transparent TextureView keeps the moving blur visible around
+                                        // the centered source video.
+                                        AndroidView(
+                                            factory = { ctx -> android.view.TextureView(ctx).apply {
+                                                isOpaque = false
+                                                previewPlayer?.setVideoTextureView(this)
+                                            } },
+                                            update = { texture ->
+                                                previewPlayer?.setVideoTextureView(texture)
+                                            },
+                                            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).align(Alignment.Center)
+                                        )
+                                    } else {
+                                        AndroidView(
+                                            factory = { ctx -> PlayerView(ctx).apply {
+                                                player = previewPlayer
+                                                useController = false
+                                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                                setKeepContentOnPlayerReset(true)
+                                            } },
+                                            update = { view -> view.player = previewPlayer },
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
                                 } else if (previewClip?.kind == "audio") {
                                     EqualizerPreview(playheadMs - previewStart, Modifier.fillMaxSize())
                                 } else {
