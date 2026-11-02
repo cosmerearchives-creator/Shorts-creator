@@ -213,9 +213,12 @@ object Exporter {
         val mainSequence = if (overlayOnly) EditedMediaItemSequence.withVideoFrom(edits)
             else EditedMediaItemSequence.withAudioAndVideoFrom(edits)
         val audio = clips.filter { it.track == 2 && it.kind == "audio" }
-        val sequences = mutableListOf(mainSequence)
-        val foregroundIndex = if (foregroundSequence != null) sequences.size else -1
+        // Media3 composites the FIRST sequence on TOP. The sharp foreground
+        // must precede the blurred main sequence or it becomes completely hidden.
+        val sequences = mutableListOf<EditedMediaItemSequence>()
+        val foregroundIndex = if (foregroundSequence != null) 0 else -1
         if (foregroundSequence != null) sequences.add(foregroundSequence)
+        sequences.add(mainSequence)
         audio.forEach { clip ->
             require(clip.endMs > clip.startMs) { "Audio needs a known duration before timeline export" }
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
