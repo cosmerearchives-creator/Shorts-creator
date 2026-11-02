@@ -181,7 +181,7 @@ fun EditingTimeline(
                 drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
             }
             lanes.forEach { (lane, label) ->
-                Canvas(Modifier.fillMaxWidth().height(61.dp).clipToBounds().pointerInput(lane, zoom) {
+                Canvas(Modifier.fillMaxWidth().height(61.dp).clipToBounds().pointerInput(lane, zoom, snappingEnabled) {
                     awaitEachGesture {
                         val clips = liveClips.value
                         val positions = livePositions.value
