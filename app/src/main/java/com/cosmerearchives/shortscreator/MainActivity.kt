@@ -55,6 +55,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.effect.GaussianBlur
+import androidx.compose.ui.draw.blur
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -593,7 +594,6 @@ class MainActivity : ComponentActivity() {
                                         .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                                             .setStartPositionMs(previewClip.startMs).setEndPositionMs(previewClip.endMs).build()).build())
                                     volume = 0f
-                                    setVideoEffects(listOf(GaussianBlur(22f)))
                                     prepare()
                                 }
                             }
@@ -624,13 +624,25 @@ class MainActivity : ComponentActivity() {
                                 if (previewClip != null && previewClip.kind == "video") {
                                     if (usePortraitFill && fillPlayer != null) {
                                         AndroidView(
-                                            factory = { ctx -> PlayerView(ctx).apply {
-                                                player = fillPlayer
-                                                useController = false
-                                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                            factory = { ctx -> android.view.TextureView(ctx).apply {
+                                                isOpaque = true
+                                                fillPlayer.setVideoTextureView(this)
                                             } },
-                                            update = { view -> view.player = fillPlayer },
-                                            modifier = Modifier.fillMaxSize()
+                                            update = { view ->
+                                                fillPlayer.setVideoTextureView(view)
+                                                view.post {
+                                                    val fw = view.width.toFloat()
+                                                    val fh = view.height.toFloat()
+                                                    if (fw > 0f && fh > 0f) {
+                                                        val scale = maxOf(fw / 16f, fh / 9f)
+                                                        val matrix = android.graphics.Matrix().apply {
+                                                            setScale(scale * 16f / fw, scale * 9f / fh, fw / 2f, fh / 2f)
+                                                        }
+                                                        view.setTransform(matrix)
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxSize().blur(24.dp)
                                         )
                                     }
                                     if (usePortraitFill) {
