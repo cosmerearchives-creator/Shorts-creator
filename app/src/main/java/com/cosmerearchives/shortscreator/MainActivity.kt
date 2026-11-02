@@ -617,6 +617,51 @@ class MainActivity : ComponentActivity() {
                                 speechLifecycle.lifecycle.addObserver(observer)
                                 onDispose { speechLifecycle.lifecycle.removeObserver(observer) }
                             }
+                            // Preview the auxiliary audio track with the same TTS ducking envelope
+                            // used by the export mix.
+                            val backgroundClips = remember(project.clips) {
+                                project.clips.filter { it.track == 2 && it.kind == "audio" && it.uri.isNotBlank() }
+                            }
+                            val backgroundPlayers = remember(project.id, backgroundClips) {
+                                backgroundClips.map { clip ->
+                                    ExoPlayer.Builder(this@MainActivity).build().apply {
+                                        setMediaItem(MediaItem.fromUri(Uri.parse(clip.uri)))
+                                        prepare()
+                                    }
+                                }
+                            }
+                            DisposableEffect(backgroundPlayers) {
+                                onDispose { backgroundPlayers.forEach { it.release() } }
+                            }
+                            LaunchedEffect(backgroundPlayers, previewPlaying, playheadMs / 50L, project.clips) {
+                                val intervals = speechOverlays.map { it.positionMs to
+                                    (it.positionMs + it.timelineDurationMs()) }
+                                backgroundClips.forEachIndexed { index, clip ->
+                                    val player = backgroundPlayers[index]
+                                    val relative = playheadMs - clip.positionMs
+                                    val active = previewPlaying && relative >= 0L &&
+                                        relative < clip.timelineDurationMs()
+                                    if (active) {
+                                        val expected = clip.startMs +
+                                            (relative * clip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
+                                        if (kotlin.math.abs(player.currentPosition - expected) > 300L) {
+                                            player.seekTo(expected)
+                                        }
+                                        val duck = if (clip.duckUnderTts) AudioDucking.gain(playheadMs, intervals) else 1f
+                                        player.volume = clip.clipVolume.coerceIn(0f, 1f) * duck
+                                        if (!player.playWhenReady) player.play()
+                                    } else if (player.playWhenReady) player.pause()
+                                }
+                            }
+                            DisposableEffect(backgroundPlayers, speechLifecycle) {
+                                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                                    if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                                        backgroundPlayers.forEach { it.pause() }
+                                    }
+                                }
+                                speechLifecycle.lifecycle.addObserver(observer)
+                                onDispose { speechLifecycle.lifecycle.removeObserver(observer) }
+                            }
                             var previewSize by remember { mutableStateOf(IntSize.Zero) }
                             val frameContext = LocalContext.current
                             val usePortraitFill = project.ratio == "9:16" && previewClip?.kind == "video" && previewClip.portraitFill &&
