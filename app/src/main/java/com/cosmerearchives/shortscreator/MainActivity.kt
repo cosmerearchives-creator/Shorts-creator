@@ -892,7 +892,7 @@ class MainActivity : ComponentActivity() {
                                                 val px = ((overlay.pipX + 1f) * previewSize.width / 2f - pipWidth / 2f).toInt()
                                                 val py = ((1f - overlay.pipY) * previewSize.height / 2f - 40).toInt()
                                                 key(overlay.uri, overlay.startMs, overlay.endMs) {
-                                                    Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(px, py) }
+                                                    Box(Modifier.graphicsLayer(alpha = overlay.layerOpacity).offset { androidx.compose.ui.unit.IntOffset(px, py) }
                                                         .width(with(androidx.compose.ui.platform.LocalDensity.current) { pipWidth.toDp() })
                                                         .height(85.dp)
                                                         .pointerInput(clipIndex, previewSize) {
@@ -1092,7 +1092,7 @@ class MainActivity : ComponentActivity() {
                                                 val px = ((overlay.pipX + 1f) * previewSize.width / 2f - pipWidth / 2f).toInt()
                                                 val py = ((1f - overlay.pipY) * previewSize.height / 2f - 40).toInt()
                                                 key(overlay.uri, overlay.startMs, overlay.endMs) {
-                                                    Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(px, py) }
+                                                    Box(Modifier.graphicsLayer(alpha = overlay.layerOpacity).offset { androidx.compose.ui.unit.IntOffset(px, py) }
                                                         .width(with(androidx.compose.ui.platform.LocalDensity.current) { pipWidth.toDp() })
                                                         .height(85.dp)
                                                         .pointerInput(clipIndex, previewSize) {
