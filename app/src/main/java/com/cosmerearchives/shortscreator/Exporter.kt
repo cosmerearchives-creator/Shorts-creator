@@ -206,9 +206,7 @@ object Exporter {
                         override fun getSpeed(timeUs: Long): Float = clip.clipSpeed.coerceIn(0.5f, 2f)
                         override fun getNextSpeedChangeTimeUs(timeUs: Long): Long = C.TIME_UNSET
                     })
-                }.setEffects(Effects(emptyList(), listOf(
-                    Presentation.createForWidthAndHeight(outputWidth, outputHeight, Presentation.LAYOUT_SCALE_TO_FIT)
-                ))).build())
+                }.build())
             }
             builder.build()
         } else null
