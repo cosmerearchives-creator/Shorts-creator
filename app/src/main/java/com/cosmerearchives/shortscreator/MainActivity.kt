@@ -1206,6 +1206,7 @@ class MainActivity : ComponentActivity() {
                                 Triple("Filters", Icons.Default.Tune, true),
                                 Triple("Transitions", Icons.Default.Animation, true),
                                 Triple("Delete", Icons.Default.DeleteOutline, true),
+                                Triple("Ripple delete", Icons.Default.DeleteSweep, true),
                                 Triple("Duplicate", Icons.Default.ContentCopy, true),
                                 Triple("Speed", Icons.Default.Speed, true),
                                 Triple("Volume", Icons.Default.VolumeUp, true),
@@ -1255,13 +1256,13 @@ class MainActivity : ComponentActivity() {
                                                         if (clip != null) {
                                                             val preceding = if (clip.track == 0) {
                                                                 project.clips.indices.filter { it < activeClip && project.clips[it].track == 0 }
-                                                                    .sumOf { (project.clips[it].endMs - project.clips[it].startMs).coerceAtLeast(0L) }
+                                                                    .sumOf { project.clips[it].timelineDurationMs() }
                                                             } else clip.positionMs
                                                             val offset = playheadMs - preceding
-                                                            val duration = clip.endMs - clip.startMs
+                                                            val duration = clip.timelineDurationMs()
                                                             if (offset >= 100L && offset <= duration - 100L) {
                                                                 val cs = project.clips.toMutableList()
-                                                                val cut = clip.startMs + offset
+                                                                val cut = clip.startMs + (offset * clip.clipSpeed.coerceIn(0.5f, 2f)).toLong()
                                                                 cs[activeClip] = clip.copy(endMs = cut)
                                                                 cs.add(activeClip + 1, clip.copy(startMs = cut,
                                                                     positionMs = if (clip.track == 0) 0L else playheadMs))
@@ -1285,6 +1286,30 @@ class MainActivity : ComponentActivity() {
                                                             updated[selected] = project.copy(clips = cs)
                                                             projects = updated
                                                             activeClip += 1
+                                                            saveProjects(updated)
+                                                        }
+                                                    }
+                                                    "Ripple delete" -> {
+                                                        val clip = currentClip
+                                                        if (clip != null && activeClip in project.clips.indices) {
+                                                            val start = if (clip.track == 0) {
+                                                                project.clips.indices.filter { it < activeClip && project.clips[it].track == 0 }
+                                                                    .sumOf { project.clips[it].timelineDurationMs() }
+                                                            } else clip.positionMs
+                                                            val removedDuration = clip.timelineDurationMs()
+                                                            val end = start + removedDuration
+                                                            val remaining = project.clips.mapIndexedNotNull { index, item ->
+                                                                if (index == activeClip) null
+                                                                else if (item.track != 0 && item.positionMs >= end) {
+                                                                    item.copy(positionMs = (item.positionMs - removedDuration).coerceAtLeast(0L))
+                                                                } else item
+                                                            }
+                                                            val updated = projects.toMutableList()
+                                                            updated[selected] = project.copy(clips = remaining)
+                                                            projects = updated
+                                                            activeClip = if (remaining.isEmpty()) -1 else activeClip.coerceAtMost(remaining.lastIndex)
+                                                            previewPlaying = false
+                                                            playheadMs = start
                                                             saveProjects(updated)
                                                         }
                                                     }
