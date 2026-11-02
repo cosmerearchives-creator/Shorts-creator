@@ -140,6 +140,7 @@ class MainActivity : ComponentActivity() {
             var availableUpdate by remember { mutableStateOf<AvailableUpdate?>(null) }
             var downloading by remember { mutableStateOf(false) }
             var exportStatus by remember { mutableStateOf("") }
+            var exportBusy by remember { mutableStateOf(false) }
             var speechGenerationStatus by remember { mutableStateOf("") }
             var speechGenerating by remember { mutableStateOf(false) }
             val ttsScope = rememberCoroutineScope()
@@ -400,16 +401,24 @@ class MainActivity : ComponentActivity() {
                                 Text(project.name, style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                             FilledTonalIconButton(
-                                 enabled = (project.clips.none { it.track == 0 } && project.clips.any { it.track == 1 }) ||
+                                 enabled = !exportBusy && ((project.clips.none { it.track == 0 } && project.clips.any { it.track == 1 }) ||
                                     (project.clips.any { it.track == 0 } &&
-                                        project.clips.filter { it.track == 0 }.all { it.kind == "video" && it.endMs > it.startMs }),
+                                        project.clips.filter { it.track == 0 }.all { it.kind == "video" && it.endMs > it.startMs })),
                                 onClick = {
+                                    exportBusy = true
                                     exportStatus = "Preparing timeline export…"
                                     try {
                                         Exporter.exportTimeline(this@MainActivity, project.clips, project.ratio) { status ->
-                                            runOnUiThread { exportStatus = status }
+                                            runOnUiThread {
+                                                exportStatus = status
+                                                if (status.startsWith("Export saved") || status.contains("failed", ignoreCase = true) ||
+                                                    status.startsWith("Export could not start")) exportBusy = false
+                                            }
                                         }
-                                    } catch (e: Exception) { exportStatus = "Timeline export failed: ${e.message}" }
+                                    } catch (e: Exception) {
+                                        exportBusy = false
+                                        exportStatus = "Timeline export failed: ${e.message}"
+                                    }
                                 }
                             ) { Icon(Icons.Default.FileUpload, "Export to library") }
                             Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
