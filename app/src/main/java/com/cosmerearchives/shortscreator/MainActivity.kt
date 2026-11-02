@@ -855,7 +855,7 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 } else if (previewClip?.kind == "audio") {
-                                    EqualizerPreview(playheadMs - previewStart, Modifier.fillMaxSize())
+                                    EqualizerPreview(playheadMs - previewStart, previewClip.uri, previewClip.startMs, previewClip.endMs, Modifier.fillMaxSize())
                                 } else {
                                     if (project.clips.none { it.track == 1 }) {
                                         Text("Add media or text to preview", color = Color.White,
