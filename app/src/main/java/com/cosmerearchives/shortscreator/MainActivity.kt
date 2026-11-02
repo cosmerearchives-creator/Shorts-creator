@@ -1552,6 +1552,100 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }) { Text(if (speechGenerating) "Generating…" else "Generate text-to-speech") }
                                 if (speechGenerationStatus.isNotBlank()) Text(speechGenerationStatus, style = MaterialTheme.typography.bodySmall)
+                                var voiceBusy by remember(currentClip.ttsUri) { mutableStateOf(false) }
+                                var voiceMessage by remember(currentClip.ttsUri) { mutableStateOf("") }
+                                fun updateVoice(effect: String, intensity: Float, rate: Float, grit: Float) {
+                                    val original = currentClip.ttsOriginalUri.ifBlank { currentClip.ttsUri }
+                                    if (original.isBlank() || voiceBusy) {
+                                        voiceMessage = "Generate speech first, or finish the previous effect."
+                                        return
+                                    }
+                                    val clipId = activeClip
+                                    val projectId = project.id
+                                    voiceBusy = true
+                                    voiceMessage = "Processing voice effect…"
+                                    ttsScope.launch {
+                                        try {
+                                            val processed = VoiceEffects.render(original, effect, intensity, rate, grit)
+                                            if (selected in projects.indices && projects[selected].id == projectId) {
+                                                val clipsNow = projects[selected].clips.toMutableList()
+                                                val latest = clipsNow.getOrNull(clipId)
+                                                if (latest != null && latest.kind == "text" &&
+                                                    latest.ttsOriginalUri.ifBlank { latest.ttsUri } == original) {
+                                                    clipsNow[clipId] = latest.copy(
+                                                        ttsUri = processed, ttsOriginalUri = original,
+                                                        voiceEffect = effect, voiceIntensity = intensity,
+                                                        wobbleRate = rate, wobbleGrit = grit)
+                                                    val updated = projects.toMutableList()
+                                                    updated[selected] = projects[selected].copy(clips = clipsNow)
+                                                    projects = updated
+                                                    saveProjects(updated)
+                                                    voiceMessage = "Effect applied: $effect"
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            voiceMessage = "Voice effect failed: ${e.message}"
+                                        } finally { voiceBusy = false }
+                                    }
+                                }
+                                Text("Voice effects", style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold)
+                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    VoiceEffects.names.forEach { effect ->
+                                        FilterChip(selected = currentClip.voiceEffect == effect,
+                                            enabled = !voiceBusy && currentClip.ttsUri.isNotBlank(),
+                                            onClick = { updateVoice(effect, currentClip.voiceIntensity, currentClip.wobbleRate, currentClip.wobbleGrit) },
+                                            label = { Text(effect) })
+                                    }
+                                }
+                                Text("Intensity: ${(currentClip.voiceIntensity * 100).toInt()}%",
+                                    style = MaterialTheme.typography.labelMedium)
+                                Slider(value = currentClip.voiceIntensity.coerceIn(0f, 1f),
+                                    enabled = !voiceBusy && currentClip.ttsUri.isNotBlank(),
+                                    valueRange = 0f..1f,
+                                    onValueChange = { amount ->
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(voiceIntensity = amount)
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                    },
+                                    onValueChangeFinished = {
+                                        saveProjects(projects)
+                                        updateVoice(currentClip.voiceEffect, currentClip.voiceIntensity, currentClip.wobbleRate, currentClip.wobbleGrit)
+                                    })
+                                if (currentClip.voiceEffect.contains("Wobble")) {
+                                    Text("Wobble speed", style = MaterialTheme.typography.labelMedium)
+                                    Slider(value = currentClip.wobbleRate.coerceIn(0.5f, 14f),
+                                        enabled = !voiceBusy, valueRange = 0.5f..14f,
+                                        onValueChange = { value ->
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(wobbleRate = value)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                        },
+                                        onValueChangeFinished = {
+                                            saveProjects(projects)
+                                            updateVoice(currentClip.voiceEffect, currentClip.voiceIntensity, currentClip.wobbleRate, currentClip.wobbleGrit)
+                                        })
+                                    Text("Wobble distortion", style = MaterialTheme.typography.labelMedium)
+                                    Slider(value = currentClip.wobbleGrit.coerceIn(0f, 1f),
+                                        enabled = !voiceBusy, valueRange = 0f..1f,
+                                        onValueChange = { value ->
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(wobbleGrit = value)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                        },
+                                        onValueChangeFinished = {
+                                            saveProjects(projects)
+                                            updateVoice(currentClip.voiceEffect, currentClip.voiceIntensity, currentClip.wobbleRate, currentClip.wobbleGrit)
+                                        })
+                                }
+                                if (voiceMessage.isNotBlank()) Text(voiceMessage, style = MaterialTheme.typography.bodySmall)
                                 Text("Adjustments", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 val adjustmentItems = listOf(
                                     Triple("Volume", "${(currentClip.ttsVolume * 100).toInt()}%", Icons.Default.VolumeUp),
