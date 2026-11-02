@@ -1,2 +1,2 @@
-Release request: v1.07.0-alpha
-Build 108 - cached video thumbnail strips and improved timeline audio waveform contrast
+Release request: v1.08.0-alpha
+Build 109 - timeline ruler pinch-to-zoom and horizontal lane panning
