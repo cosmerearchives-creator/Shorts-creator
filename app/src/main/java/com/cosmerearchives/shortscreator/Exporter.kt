@@ -253,28 +253,58 @@ object Exporter {
         val foregroundIndex = if (foregroundSequence != null) 0 else -1
         if (foregroundSequence != null) sequences.add(foregroundSequence)
         sequences.add(mainSequence)
+        val spokenIntervals = clips.filter {
+            it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank()
+        }.mapNotNull { speech ->
+            val duration = try {
+                val metadata = MediaMetadataRetriever()
+                try {
+                    metadata.setDataSource(context, Uri.parse(speech.ttsUri))
+                    metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                } finally { metadata.release() }
+            } catch (_: Exception) { null }
+            duration?.takeIf { it > 0L }?.let { speech.positionMs to (speech.positionMs + it) }
+        }
         audio.forEach { clip ->
             require(clip.endMs > clip.startMs) { "Audio needs a known duration before timeline export" }
+            val speed = clip.clipSpeed.coerceIn(0.5f, 2f)
+            val timelineEnd = clip.positionMs + clip.timelineDurationMs()
+            val edges = (listOf(clip.positionMs, timelineEnd) +
+                (if (clip.duckUnderTts) spokenIntervals.flatMap { listOf(it.first, it.second) } else emptyList()))
+                .filter { it in clip.positionMs..timelineEnd }.distinct().sorted()
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
             if (clip.positionMs > 0) builder.addGap(clip.positionMs * 1000L)
-            val item = MediaItem.Builder().setUri(Uri.parse(clip.uri))
-                .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
-                    .setStartPositionMs(clip.startMs).setEndPositionMs(clip.endMs).build()).build()
-            builder.addItem(EditedMediaItem.Builder(item).apply {
-                if (clip.clipSpeed != 1f) setSpeed(object : SpeedProvider {
-                    override fun getSpeed(timeUs: Long): Float = clip.clipSpeed.coerceIn(0.5f, 2f)
-                    override fun getNextSpeedChangeTimeUs(timeUs: Long): Long = C.TIME_UNSET
-                })
-            }.setEffects(Effects(
-                if (clip.clipVolume < 0.999f) listOf(
-                    ChannelMixingAudioProcessor().apply {
-                        for (channels in 1..6) {
-                            putChannelMixingMatrix(ChannelMixingMatrix.createForConstantPower(channels, channels)
-                                .scaleBy(clip.clipVolume.coerceIn(0f, 1f)))
+            for (index in 0 until edges.lastIndex) {
+                val from = edges[index]
+                val to = edges[index + 1]
+                if (to <= from) continue
+                val sourceFrom = (clip.startMs + (from - clip.positionMs) * speed).toLong()
+                    .coerceIn(clip.startMs, clip.endMs)
+                val sourceTo = (clip.startMs + (to - clip.positionMs) * speed).toLong()
+                    .coerceIn(clip.startMs, clip.endMs)
+                if (sourceTo <= sourceFrom) continue
+                val mid = from + (to - from) / 2
+                val speaking = clip.duckUnderTts && spokenIntervals.any { mid >= it.first && mid < it.second }
+                val level = clip.clipVolume.coerceIn(0f, 1f) * (if (speaking) 0.25f else 1f)
+                val item = MediaItem.Builder().setUri(Uri.parse(clip.uri))
+                    .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(sourceFrom).setEndPositionMs(sourceTo).build()).build()
+                builder.addItem(EditedMediaItem.Builder(item).apply {
+                    if (speed != 1f) setSpeed(object : SpeedProvider {
+                        override fun getSpeed(timeUs: Long): Float = speed
+                        override fun getNextSpeedChangeTimeUs(timeUs: Long): Long = C.TIME_UNSET
+                    })
+                }.setEffects(Effects(
+                    if (level < 0.999f) listOf(
+                        ChannelMixingAudioProcessor().apply {
+                            for (channels in 1..6) {
+                                putChannelMixingMatrix(ChannelMixingMatrix.createForConstantPower(channels, channels)
+                                    .scaleBy(level))
+                            }
                         }
-                    }
-                ) else emptyList(), emptyList()
-            )).build())
+                    ) else emptyList(), emptyList()
+                )).build())
+            }
             sequences.add(builder.build())
         }
         clips.filter { it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank() }.forEach { caption ->
