@@ -312,18 +312,13 @@ object Exporter {
                                     val h = (480f * height / width).toInt()
                                     val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                                     val canvas = Canvas(bitmap)
-                                    val brush = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(163, 129, 225) }
                                     val time = clip.startMs + presentationTimeUs / 1000L
-                                    val bin = ((time.toDouble() / clip.endMs.coerceAtLeast(1L)) * levels.size).toInt().coerceIn(0, (levels.size - 1).coerceAtLeast(0))
-                                    val level = levels.getOrNull(bin)?.coerceIn(0.08f, 1f) ?: 0.2f
-                                    for (i in 0 until 32) {
-                                        val phase = presentationTimeUs / 170000.0 + i * 0.7
-                                        val motion = kotlin.math.abs(kotlin.math.sin(phase) * kotlin.math.cos(phase * 0.45)).toFloat()
-                                        val barH = h * 0.65f * level * (0.2f + 0.8f * motion)
-                                        val x = (i + 0.5f) * w / 32
-                                        canvas.drawRoundRect(x - 5f, (h - barH) / 2, x + 5f,
-                                            (h + barH) / 2, 4f, 4f, brush)
-                                    }
+                                    val duration = clip.endMs.coerceAtLeast(1L)
+                                    val bin = ((time.toDouble() / duration) * levels.size).toInt()
+                                        .coerceIn(0, (levels.size - 1).coerceAtLeast(0))
+                                    val level = levels.getOrNull(bin)?.coerceIn(0f, 1f) ?: 0f
+                                    OrbitalScribble.draw(canvas, w.toFloat(), h.toFloat(),
+                                        presentationTimeUs / 1000L, level)
                                     return bitmap
                                 }
                             }
