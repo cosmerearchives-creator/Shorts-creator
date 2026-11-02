@@ -14,8 +14,8 @@ android {
         targetSdk = 35
         ndk { abiFilters += listOf("arm64-v8a") }
         externalNativeBuild { cmake { cppFlags += "-std=c++17" } }
-        versionCode = 109
-        versionName = "1.08.0-alpha"
+        versionCode = 110
+        versionName = "1.09.0-alpha"
     }
 
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt") } }
