@@ -426,6 +426,13 @@ class MainActivity : ComponentActivity() {
                                         color = purple, style = MaterialTheme.typography.labelMedium)
                                 }
                             }
+                            if (exportStatus.isNotBlank()) {
+                                Surface(color = lavender, shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                    Text(exportStatus, modifier = Modifier.padding(10.dp),
+                                        style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
                             Spacer(Modifier.height(8.dp))
                             var previewStart = 0L
                             val previewIndex = project.clips.indices.firstOrNull { i ->
