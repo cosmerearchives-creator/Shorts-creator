@@ -129,6 +129,28 @@ fun EditingTimeline(
             }
         }
     }
+    // Decode a small, bounded thumbnail for each distinct video, off the UI thread.
+    val videoSources = clips.filter { it.kind == "video" }.map { it.uri }.distinct()
+    val thumbnails = remember { mutableStateMapOf<String, android.graphics.Bitmap>() }
+    LaunchedEffect(videoSources) {
+        videoSources.forEach { uri ->
+            if (uri !in thumbnails) {
+                val image = withContext(Dispatchers.IO) {
+                    val retriever = android.media.MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(context, Uri.parse(uri))
+                        val frame = retriever.getFrameAtTime(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        frame?.let { raw ->
+                            val scaled = android.graphics.Bitmap.createScaledBitmap(raw, 72, 44, true)
+                            if (scaled !== raw) raw.recycle()
+                            scaled
+                        }
+                    } catch (_: Exception) { null } finally { retriever.release() }
+                }
+                if (image != null) thumbnails[uri] = image
+            }
+        }
+    }
     val rulerPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE } }
     val clipPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE } }
     val lanes = remember { listOf(1 to "Overlay", 0 to "Main", 2 to "Audio") }
@@ -285,6 +307,24 @@ fun EditingTimeline(
                         val tint = if (clips[i].kind == "audio") audioColor else if (lane == 0) videoColor else overlayColor
                         drawRect(tint, Offset(x, 8.dp.toPx()), androidx.compose.ui.geometry.Size(w, 44.dp.toPx()))
                         val clip = clips[i]
+                        if (clip.kind == "video") {
+                            thumbnails[clip.uri]?.let { frame ->
+                                clipRect(x, 8.dp.toPx(), x + w, 52.dp.toPx()) {
+                                    // Repeat the cached frame across visible portions of long clips.
+                                    val cell = 72.dp.toPx()
+                                    val visibleBegin = maxOf(x, 0f)
+                                    val visibleEnd = minOf(x + w, size.width)
+                                    val firstCell = ((visibleBegin - x) / cell).toInt().coerceAtLeast(0)
+                                    val lastCell = ((visibleEnd - x) / cell).toInt().coerceAtLeast(firstCell)
+                                    for (column in firstCell..lastCell) {
+                                        val x0 = x + column * cell
+                                        drawContext.canvas.nativeCanvas.drawBitmap(frame, null,
+                                            android.graphics.RectF(x0, 8.dp.toPx(), minOf(x0 + cell, x + w), 52.dp.toPx()),
+                                            Paint(Paint.FILTER_BITMAP_FLAG).apply { alpha = 175 })
+                                    }
+                                }
+                            }
+                        }
                         val audioUri = when (clip.kind) {
                             "video", "audio" -> clip.uri
                             "text" -> clip.ttsUri
