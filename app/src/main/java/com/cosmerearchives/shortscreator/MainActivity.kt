@@ -672,7 +672,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 } else if (previewClip?.kind == "audio") {
-                                    EqualizerPreview(playheadMs - previewStart, Modifier.fillMaxSize())
+                                    EqualizerPreview(playheadMs - previewStart, previewClip.uri, previewClip.startMs, previewClip.endMs, Modifier.fillMaxSize())
                                 } else {
                                     if (project.clips.none { it.track == 1 }) {
                                         Text("Add media or text to preview", color = Color.White,
@@ -2229,20 +2229,21 @@ private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs:
 }
 
 @Composable
-private fun EqualizerPreview(positionMs: Long, modifier: Modifier = Modifier) {
+private fun EqualizerPreview(positionMs: Long, source: String, startMs: Long, endMs: Long, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var levels by remember(source) { mutableStateOf<List<Float>>(emptyList()) }
+    LaunchedEffect(source) {
+        levels = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            cachedAudioPeaks(context, Uri.parse(source))
+        }
+    }
     Canvas(modifier.background(dark)) {
-        val bars = 32
-        val spacing = size.width / (bars * 1.5f)
-        val barWidth = spacing * 0.72f
-        for (i in 0 until bars) {
-            val phase = positionMs / 190.0 + i * 0.73
-            val motion = (0.22 + 0.78 * kotlin.math.abs(kotlin.math.sin(phase) * kotlin.math.cos(phase * 0.37 + i)))
-                .toFloat()
-            val height = size.height * motion * 0.67f
-            val x = (i + 0.5f) * size.width / bars - barWidth / 2f
-            drawRoundRect(purple, topLeft = Offset(x, (size.height - height) / 2f),
-                size = androidx.compose.ui.geometry.Size(barWidth, height),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f))
+        val duration = endMs.coerceAtLeast(1L)
+        val at = (startMs + positionMs).coerceIn(0L, duration)
+        val index = ((at.toDouble() / duration) * levels.size).toInt().coerceIn(0, (levels.size - 1).coerceAtLeast(0))
+        val amplitude = levels.getOrNull(index) ?: 0f
+        drawContext.canvas.nativeCanvas.let {
+            OrbitalScribble.draw(it, size.width, size.height, positionMs, amplitude)
         }
     }
 }
