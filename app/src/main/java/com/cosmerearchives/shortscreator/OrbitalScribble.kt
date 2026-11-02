@@ -11,13 +11,13 @@ import kotlin.math.min
 
 /** Shared deterministic audio-driven artwork for preview and rendered video frames. */
 object OrbitalScribble {
-    fun draw(canvas: Canvas, width: Float, height: Float, timeMs: Long, amplitude: Float, sensitivity: Float = 1f) {
+    fun draw(canvas: Canvas, width: Float, height: Float, timeMs: Long, amplitude: Float, sensitivity: Float = 1f, inkColor: Int = Color.rgb(225, 207, 250), sizeScale: Float = 1f, motionSpeed: Float = 1f) {
         val cx = width / 2f
         val cy = height / 2f
-        val radius = min(width, height) * 0.28f
+        val radius = min(width, height) * 0.28f * sizeScale.coerceIn(0.4f, 1.5f)
         val energy = (amplitude * sensitivity.coerceIn(0.25f, 3f)).coerceIn(0f, 1f)
         val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(225, 207, 250)
+            color = inkColor
             style = Paint.Style.STROKE
             strokeWidth = min(width, height) * 0.004f
             strokeCap = Paint.Cap.ROUND
@@ -28,7 +28,7 @@ object OrbitalScribble {
             strokeWidth = min(width, height) * 0.0026f
         }
         canvas.drawCircle(cx, cy, radius * 1.35f, ring)
-        val t = timeMs / 1000.0
+        val t = timeMs / 1000.0 * motionSpeed.coerceIn(0.1f, 3f)
         for (strand in 0 until 19) {
             val path = Path()
             for (point in 0..110) {
