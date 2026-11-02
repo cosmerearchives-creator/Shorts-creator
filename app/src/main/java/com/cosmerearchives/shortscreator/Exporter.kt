@@ -128,6 +128,11 @@ object Exporter {
             lines.take(2).forEachIndexed { i, text -> canvas.drawText(text, 512f, 75f + i * 75f, paint) }
             item to bitmap
         }
+        val reactiveText = if (overlayOnly) visualOverlays.filter {
+            it.kind == "text" && it.ttsVisualizer && it.ttsUri.isNotBlank()
+        }.map { text ->
+            text to cachedAudioPeaks(context, Uri.parse(text.ttsUri))
+        } else emptyList()
         var timelineStartMs = 0L
         val edits = main.mapIndexed { index, clip ->
             val segmentStart = timelineStartMs
@@ -175,7 +180,32 @@ object Exporter {
                     }
                 })
             } else emptyList()
-            val effects = (if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()) +
+            val reactiveOverlays = if (overlayOnly && reactiveText.isNotEmpty()) {
+                listOf(object : BitmapOverlay() {
+                    override fun getBitmap(presentationTimeUs: Long): Bitmap {
+                        val bitmap = Bitmap.createBitmap(480, (480f * outputHeight / outputWidth).toInt(),
+                            Bitmap.Config.ARGB_8888)
+                        val canvas = Canvas(bitmap)
+                        val absoluteMs = segmentStart + presentationTimeUs / 1000L
+                        val current = reactiveText.firstOrNull { (text, _) ->
+                            absoluteMs >= text.positionMs &&
+                                absoluteMs < text.positionMs + text.timelineDurationMs()
+                        }
+                        if (current != null) {
+                            val (text, peaks) = current
+                            val elapsed = absoluteMs - text.positionMs
+                            val duration = text.timelineDurationMs().coerceAtLeast(1L)
+                            val bin = ((elapsed.toDouble() / duration) * peaks.size).toInt()
+                                .coerceIn(0, (peaks.size - 1).coerceAtLeast(0))
+                            OrbitalScribble.draw(canvas, bitmap.width.toFloat(), bitmap.height.toFloat(),
+                                elapsed, peaks.getOrNull(bin) ?: 0f)
+                        }
+                        return bitmap
+                    }
+                })
+            } else emptyList()
+            val effects = (if (reactiveOverlays.isNotEmpty()) listOf(OverlayEffect(reactiveOverlays)) else emptyList()) +
+                (if (overlays.isNotEmpty()) listOf(OverlayEffect(overlays)) else emptyList()) +
                 (if (fades.isNotEmpty()) listOf(OverlayEffect(fades)) else emptyList())
             EditedMediaItem.Builder(media).apply {
                 if (!overlayOnly && clip.clipSpeed != 1f) setSpeed(object : SpeedProvider {
