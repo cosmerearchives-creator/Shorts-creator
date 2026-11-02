@@ -70,7 +70,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f, val transition: String = "None", val fadeDurationMs: Long = 400L, val portraitFill: Boolean = true, val ttsOriginalUri: String = "", val voiceEffect: String = "Normal", val voiceIntensity: Float = 0.7f, val wobbleRate: Float = 4f, val wobbleGrit: Float = 0.25f, val ttsVisualizer: Boolean = true, val visualizerSensitivity: Float = 1f, val visualizerColor: Int = 0xFFE1CFFA.toInt(), val visualizerSize: Float = 1f, val visualizerMotion: Float = 1f)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f, val transition: String = "None", val fadeDurationMs: Long = 400L, val portraitFill: Boolean = true, val ttsOriginalUri: String = "", val voiceEffect: String = "Normal", val voiceIntensity: Float = 0.7f, val wobbleRate: Float = 4f, val wobbleGrit: Float = 0.25f, val ttsVisualizer: Boolean = true, val visualizerSensitivity: Float = 1f, val visualizerColor: Int = 0xFFE1CFFA.toInt(), val visualizerSize: Float = 1f, val visualizerMotion: Float = 1f, val textAnimation: String = "None")
 /** Duration in final timeline after offline speed processing. */
 fun Clip.timelineDurationMs(): Long = ((endMs - startMs).coerceAtLeast(0L) /
     (if (kind == "video" || kind == "audio") clipSpeed.coerceIn(0.5f, 2f) else 1f)).toLong()
@@ -761,6 +761,9 @@ class MainActivity : ComponentActivity() {
                                         val fade = minOf(overlay.fadeDurationMs.coerceIn(100L, 3000L), length / 3).coerceAtLeast(1L)
                                         minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
                                     } else 1f
+                                    val animationProgress = ((playheadMs - overlay.positionMs).toFloat() / 500f).coerceIn(0f, 1f)
+                                    val animationAlpha = if (overlay.kind == "text" && overlay.textAnimation == "Fade") animationProgress else 1f
+                                    val animationScale = if (overlay.kind == "text" && overlay.textAnimation == "Pop") 0.6f + animationProgress * 0.4f else 1f
                                     if (overlay.track == 1 &&
                                         playheadMs >= overlay.positionMs &&
                                         playheadMs < overlay.positionMs + overlay.timelineDurationMs()) {
@@ -777,7 +780,7 @@ class MainActivity : ComponentActivity() {
                                                 } else Color(overlay.textColor),
                                                     fontSize = (overlay.textSize * 0.42f).sp,
                                                     textAlign = TextAlign.Center,
-                                                    modifier = Modifier.align(Alignment.TopStart).graphicsLayer(alpha = overlayFade)
+                                                    modifier = Modifier.align(Alignment.TopStart).graphicsLayer(alpha = overlayFade * animationAlpha, scaleX = animationScale, scaleY = animationScale)
                                                         .offset { androidx.compose.ui.unit.IntOffset(x - previewSize.width / 4, y - 24) }
                                                         .width(180.dp)
                                                         .pointerInput(clipIndex, previewSize) {
@@ -815,7 +818,7 @@ class MainActivity : ComponentActivity() {
                                                             androidx.compose.ui.graphics.ColorFilter.colorMatrix(
                                                                 androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) })
                                                         else null,
-                                                        modifier = Modifier.align(Alignment.Center).graphicsLayer(alpha = overlayFade)
+                                                        modifier = Modifier.align(Alignment.Center).graphicsLayer(alpha = overlayFade * animationAlpha, scaleX = animationScale, scaleY = animationScale)
                                                             .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
                                                             .fillMaxWidth((0.7f * overlay.imageScale).coerceIn(0.1f, 1f)).height((150f * overlay.imageScale).dp)
                                                             .pointerInput(clipIndex, previewSize) {
@@ -958,6 +961,9 @@ class MainActivity : ComponentActivity() {
                                         val fade = minOf(400L, length / 3).coerceAtLeast(1L)
                                         minOf(1f, elapsed.toFloat() / fade, (length - elapsed).toFloat() / fade).coerceIn(0f, 1f)
                                     } else 1f
+                                    val animationProgress = ((playheadMs - overlay.positionMs).toFloat() / 500f).coerceIn(0f, 1f)
+                                    val animationAlpha = if (overlay.kind == "text" && overlay.textAnimation == "Fade") animationProgress else 1f
+                                    val animationScale = if (overlay.kind == "text" && overlay.textAnimation == "Pop") 0.6f + animationProgress * 0.4f else 1f
                                     if (overlay.track == 1 &&
                                         playheadMs >= overlay.positionMs &&
                                         playheadMs < overlay.positionMs + (overlay.endMs - overlay.startMs).coerceAtLeast(0L)) {
@@ -974,7 +980,7 @@ class MainActivity : ComponentActivity() {
                                                 } else Color(overlay.textColor),
                                                     fontSize = (overlay.textSize * 0.42f).sp,
                                                     textAlign = TextAlign.Center,
-                                                    modifier = Modifier.align(Alignment.TopStart).graphicsLayer(alpha = overlayFade)
+                                                    modifier = Modifier.align(Alignment.TopStart).graphicsLayer(alpha = overlayFade * animationAlpha, scaleX = animationScale, scaleY = animationScale)
                                                         .offset { androidx.compose.ui.unit.IntOffset(x - previewSize.width / 4, y - 24) }
                                                         .width(180.dp)
                                                         .pointerInput(clipIndex, previewSize) {
@@ -1012,7 +1018,7 @@ class MainActivity : ComponentActivity() {
                                                             androidx.compose.ui.graphics.ColorFilter.colorMatrix(
                                                                 androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) })
                                                         else null,
-                                                        modifier = Modifier.align(Alignment.Center).graphicsLayer(alpha = overlayFade)
+                                                        modifier = Modifier.align(Alignment.Center).graphicsLayer(alpha = overlayFade * animationAlpha, scaleX = animationScale, scaleY = animationScale)
                                                             .offset { androidx.compose.ui.unit.IntOffset(dx, dy) }
                                                             .fillMaxWidth((0.7f * overlay.imageScale).coerceIn(0.1f, 1f)).height((150f * overlay.imageScale).dp)
                                                             .pointerInput(clipIndex, previewSize) {
@@ -1774,6 +1780,34 @@ class MainActivity : ComponentActivity() {
                                         })
                                 }
                                 if (voiceMessage.isNotBlank()) Text(voiceMessage, style = MaterialTheme.typography.bodySmall)
+                                Text("Text entrance animation", style = MaterialTheme.typography.titleMedium)
+                                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    listOf("None", "Fade", "Pop").forEach { choice ->
+                                        FilterChip(selected = currentClip.textAnimation == choice, onClick = {
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(textAnimation = choice)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                            saveProjects(updated)
+                                        }, label = { Text(choice) })
+                                    }
+                                }
+                                val previousTextStyle = project.clips.take(activeClip).lastOrNull { it.kind == "text" }
+                                if (previousTextStyle != null) {
+                                    TextButton(onClick = {
+                                        val cs = project.clips.toMutableList()
+                                        cs[activeClip] = currentClip.copy(
+                                            textSize = previousTextStyle.textSize,
+                                            textColor = previousTextStyle.textColor,
+                                            textAnimation = previousTextStyle.textAnimation)
+                                        val updated = projects.toMutableList()
+                                        updated[selected] = project.copy(clips = cs)
+                                        projects = updated
+                                        saveProjects(updated)
+                                    }) { Text("Reuse previous text style") }
+                                }
                                 Text("Adjustments", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 val adjustmentItems = listOf(
                                     Triple("Volume", "${(currentClip.ttsVolume * 100).toInt()}%", Icons.Default.VolumeUp),
@@ -2285,7 +2319,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat(), c.optDouble("clipSpeed", 1.0).toFloat(), c.optString("transition", "None"), c.optLong("fadeDurationMs", 400L), c.optBoolean("portraitFill", true), c.optString("ttsOriginalUri", ""), c.optString("voiceEffect", "Normal"), c.optDouble("voiceIntensity", 0.7).toFloat(), c.optDouble("wobbleRate", 4.0).toFloat(), c.optDouble("wobbleGrit", 0.25).toFloat(), c.optBoolean("ttsVisualizer", true), c.optDouble("visualizerSensitivity", 1.0).toFloat(), c.optInt("visualizerColor", 0xFFE1CFFA.toInt()), c.optDouble("visualizerSize", 1.0).toFloat(), c.optDouble("visualizerMotion", 1.0).toFloat())
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat(), c.optDouble("clipSpeed", 1.0).toFloat(), c.optString("transition", "None"), c.optLong("fadeDurationMs", 400L), c.optBoolean("portraitFill", true), c.optString("ttsOriginalUri", ""), c.optString("voiceEffect", "Normal"), c.optDouble("voiceIntensity", 0.7).toFloat(), c.optDouble("wobbleRate", 4.0).toFloat(), c.optDouble("wobbleGrit", 0.25).toFloat(), c.optBoolean("ttsVisualizer", true), c.optDouble("visualizerSensitivity", 1.0).toFloat(), c.optInt("visualizerColor", 0xFFE1CFFA.toInt()), c.optDouble("visualizerSize", 1.0).toFloat(), c.optDouble("visualizerMotion", 1.0).toFloat(), c.optString("textAnimation", "None"))
             }, obj.optString("id", "legacy-project-$i"))
         }
     }
@@ -2308,7 +2342,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble()).put("clipSpeed", c.clipSpeed.toDouble()).put("transition", c.transition).put("fadeDurationMs", c.fadeDurationMs).put("portraitFill", c.portraitFill).put("ttsOriginalUri", c.ttsOriginalUri).put("voiceEffect", c.voiceEffect).put("voiceIntensity", c.voiceIntensity.toDouble()).put("wobbleRate", c.wobbleRate.toDouble()).put("wobbleGrit", c.wobbleGrit.toDouble()).put("ttsVisualizer", c.ttsVisualizer).put("visualizerSensitivity", c.visualizerSensitivity.toDouble()).put("visualizerColor", c.visualizerColor).put("visualizerSize", c.visualizerSize.toDouble()).put("visualizerMotion", c.visualizerMotion.toDouble())) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble()).put("clipSpeed", c.clipSpeed.toDouble()).put("transition", c.transition).put("fadeDurationMs", c.fadeDurationMs).put("portraitFill", c.portraitFill).put("ttsOriginalUri", c.ttsOriginalUri).put("voiceEffect", c.voiceEffect).put("voiceIntensity", c.voiceIntensity.toDouble()).put("wobbleRate", c.wobbleRate.toDouble()).put("wobbleGrit", c.wobbleGrit.toDouble()).put("ttsVisualizer", c.ttsVisualizer).put("visualizerSensitivity", c.visualizerSensitivity.toDouble()).put("visualizerColor", c.visualizerColor).put("visualizerSize", c.visualizerSize.toDouble()).put("visualizerMotion", c.visualizerMotion.toDouble()).put("textAnimation", c.textAnimation)) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("id", p.id).put("clips", clips))
         }
         val serialized = arr.toString()
