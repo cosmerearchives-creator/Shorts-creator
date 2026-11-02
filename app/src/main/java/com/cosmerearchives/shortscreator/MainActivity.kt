@@ -2287,6 +2287,15 @@ private fun EqualizerPreview(positionMs: Long, source: String, startMs: Long, en
     }
 }
 
+private fun formatTrimTime(milliseconds: Long): String {
+    val ms = milliseconds.coerceAtLeast(0L)
+    val hours = ms / 3_600_000L
+    val minutes = (ms / 60_000L) % 60L
+    val seconds = (ms / 1_000L) % 60L
+    val hundredths = (ms % 1_000L) / 10L
+    return String.format(java.util.Locale.US, "%02d:%02d:%02d.%02d", hours, minutes, seconds, hundredths)
+}
+
 @Composable
 private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConfirm: (Long, Long) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -2586,13 +2595,13 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                         }
                     }
                     HorizontalDivider()
-                    Text("In point: ${"%.2f".format(java.util.Locale.US, startMs / 1000.0)}s")
+                    Text("In point: ${formatTrimTime(startMs)}")
                     Slider(value = startMs.toFloat(), valueRange = 0f..duration.toFloat(),
                         onValueChange = {
                             startMs = it.toLong().coerceAtMost((endMs - 100L).coerceAtLeast(0L))
                             player?.seekTo(startMs)
                         })
-                    Text("Out point: ${"%.2f".format(java.util.Locale.US, endMs / 1000.0)}s")
+                    Text("Out point: ${formatTrimTime(endMs)}")
                     Slider(value = endMs.toFloat(), valueRange = 0f..duration.toFloat(),
                         onValueChange = {
                             endMs = it.toLong().coerceAtLeast((startMs + 100L).coerceAtMost(duration))
@@ -2604,7 +2613,7 @@ private fun ImportReviewDialog(item: PendingImport, onCancel: () -> Unit, onConf
                         OutlinedButton(onClick = { endMs = (endMs - 33L).coerceAtLeast(startMs + 100L); player?.seekTo(endMs - 33L) }) { Text("Out −") }
                         OutlinedButton(onClick = { endMs = (endMs + 33L).coerceAtMost(duration); player?.seekTo(endMs - 33L) }) { Text("Out +") }
                     }
-                    Text("Importing ${"%.2f".format(java.util.Locale.US, (endMs - startMs) / 1000.0)} seconds")
+                    Text("Importing ${formatTrimTime(endMs - startMs)}")
                 } else if (duration <= 0L && item.kind != "image") {
                     Text("Duration unavailable. This file cannot be trimmed yet.")
                 }
