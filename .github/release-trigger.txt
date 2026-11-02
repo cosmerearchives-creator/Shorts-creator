@@ -1,2 +1,2 @@
-Release request: v1.08.0-alpha
-Build 109 - timeline ruler pinch-to-zoom and horizontal lane panning
+Release request: v1.09.0-alpha
+Build 110 - 10-second test export from the editor using timeline export pipeline
