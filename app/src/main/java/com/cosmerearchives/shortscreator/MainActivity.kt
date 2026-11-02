@@ -1177,6 +1177,30 @@ class MainActivity : ComponentActivity() {
                                     Text("History")
                                 }
                             }
+                            var showRecovery by remember(project.id) { mutableStateOf(false) }
+                            TextButton(onClick = { showRecovery = !showRecovery }) {
+                                Text(if (showRecovery) "Hide recovery" else "Recover saved project")
+                            }
+                            if (showRecovery) {
+                                val recovery = remember(showRecovery, project.id) {
+                                    readRecoverySnapshots(project.id)
+                                }
+                                if (recovery.isEmpty()) {
+                                    Text("No recovery snapshots yet", style = MaterialTheme.typography.bodySmall)
+                                } else {
+                                    Column(Modifier.fillMaxWidth().heightIn(max = 220.dp)
+                                        .verticalScroll(rememberScrollState())) {
+                                        recovery.forEachIndexed { index, snapshot ->
+                                            TextButton(onClick = {
+                                                restoreTimeline(snapshot)
+                                                showRecovery = false
+                                            }) {
+                                                Text("Restore saved version ${index + 1} • ${snapshot.clips.size} clips")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             if (showEditHistory) {
                                 val previous = undoHistory[project.id].orEmpty()
                                 val upcoming = redoHistory[project.id].orEmpty()
@@ -2374,6 +2398,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun readRecoverySnapshots(projectId: String): List<Project> {
+        return (0 until 5).mapNotNull { index ->
+            prefs.getString("recovery_$index", null)?.let { data ->
+                try { parseProjects(data).firstOrNull { it.id == projectId } }
+                catch (_: Exception) { null }
+            }
+        }.distinctBy { it.clips }
+    }
+
     private fun saveProjects(projects: List<Project>) {
         val snapshot = projects.toList()
         latestSnapshot = snapshot
@@ -2403,6 +2436,12 @@ class MainActivity : ComponentActivity() {
             try {
                 JSONArray(previous)
                 editor.putString("data_backup", previous)
+                // Rotate persistent snapshots only when the project content changes.
+                for (index in 4 downTo 1) {
+                    val older = prefs.getString("recovery_${index - 1}", null)
+                    if (older != null) editor.putString("recovery_$index", older)
+                }
+                editor.putString("recovery_0", previous)
             } catch (_: Exception) { }
         }
         editor.putString("data", serialized).apply()
