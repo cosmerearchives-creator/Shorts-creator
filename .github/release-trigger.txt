@@ -1,3 +1,3 @@
-Release request: v1.12.0-beta
-Build 113 - Fade/Pop text entrance animation and previous-text styling reuse in preview and export
+Release request: v1.13.0-beta
+Build 114 - navigable editor undo history panel with snapshot restore
 Fallback preserved at fallback/v1.09.0-alpha-build-110
