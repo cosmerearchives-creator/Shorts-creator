@@ -70,7 +70,7 @@ private val purple = Color(0xFF685B86)
 private val ink = Color(0xFF353238)
 private val dark = Color(0xFF292630)
 
-data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f, val transition: String = "None", val fadeDurationMs: Long = 400L, val portraitFill: Boolean = true, val ttsOriginalUri: String = "", val voiceEffect: String = "Normal", val voiceIntensity: Float = 0.7f, val wobbleRate: Float = 4f, val wobbleGrit: Float = 0.25f, val ttsVisualizer: Boolean = true, val visualizerSensitivity: Float = 1f)
+data class Clip(val uri: String, val kind: String, val track: Int, val startMs: Long = 0L, val endMs: Long = 0L, val positionMs: Long = 0L, val pipScale: Float = 0.35f, val pipX: Float = 0.55f, val pipY: Float = 0.55f, val caption: String = "", val textSize: Float = 62f, val textColor: Int = -1, val textX: Float = 0f, val textY: Float = -0.65f, val imageX: Float = 0f, val imageY: Float = 0f, val imageScale: Float = 1f, val ttsUri: String = "", val spokenText: String = "", val ttsVolume: Float = 1f, val ttsPitch: Float = 1f, val ttsSpeed: Float = 1f, val videoFilter: String = "None", val clipVolume: Float = 1f, val clipSpeed: Float = 1f, val transition: String = "None", val fadeDurationMs: Long = 400L, val portraitFill: Boolean = true, val ttsOriginalUri: String = "", val voiceEffect: String = "Normal", val voiceIntensity: Float = 0.7f, val wobbleRate: Float = 4f, val wobbleGrit: Float = 0.25f, val ttsVisualizer: Boolean = true, val visualizerSensitivity: Float = 1f, val visualizerColor: Int = 0xFFE1CFFA.toInt(), val visualizerSize: Float = 1f, val visualizerMotion: Float = 1f)
 /** Duration in final timeline after offline speed processing. */
 fun Clip.timelineDurationMs(): Long = ((endMs - startMs).coerceAtLeast(0L) /
     (if (kind == "video" || kind == "audio") clipSpeed.coerceIn(0.5f, 2f) else 1f)).toLong()
@@ -733,7 +733,8 @@ class MainActivity : ComponentActivity() {
                                     if (visualizerText != null) {
                                         EqualizerPreview(playheadMs - visualizerText.positionMs,
                                             visualizerText.ttsUri, 0L, visualizerText.timelineDurationMs(),
-                                            Modifier.fillMaxSize(), visualizerText.visualizerSensitivity)
+                                            Modifier.fillMaxSize(), visualizerText.visualizerSensitivity,
+                                            visualizerText.visualizerColor, visualizerText.visualizerSize, visualizerText.visualizerMotion)
                                     }
                                 }
                                 // The current clip's incoming/outgoing fade is rendered over the editor preview.
@@ -928,7 +929,8 @@ class MainActivity : ComponentActivity() {
                                     if (visualizerText != null) {
                                         EqualizerPreview(playheadMs - visualizerText.positionMs,
                                             visualizerText.ttsUri, 0L, visualizerText.timelineDurationMs(),
-                                            Modifier.fillMaxSize(), visualizerText.visualizerSensitivity)
+                                            Modifier.fillMaxSize(), visualizerText.visualizerSensitivity,
+                                            visualizerText.visualizerColor, visualizerText.visualizerSize, visualizerText.visualizerMotion)
                                     }
                                 }
                                 // The current clip's incoming/outgoing fade is rendered over the editor preview.
@@ -1659,6 +1661,38 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                                 if (currentClip.ttsVisualizer) {
+                                    Text("Color", style = MaterialTheme.typography.labelMedium)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        listOf(0xFFE1CFFA.toInt(), 0xFF78D8EB.toInt(), 0xFFFFA86B.toInt(),
+                                            0xFF91E8A9.toInt(), 0xFFFF81B4.toInt()).forEach { shade ->
+                                            TextButton(onClick = {
+                                                val cs = project.clips.toMutableList()
+                                                cs[activeClip] = currentClip.copy(visualizerColor = shade)
+                                                val updated = projects.toMutableList()
+                                                updated[selected] = project.copy(clips = cs)
+                                                projects = updated
+                                                saveProjects(updated)
+                                            }) { Text("●", color = Color(shade)) }
+                                        }
+                                    }
+                                    Text("Size", style = MaterialTheme.typography.labelMedium)
+                                    Slider(value = currentClip.visualizerSize.coerceIn(0.4f, 1.5f),
+                                        valueRange = 0.4f..1.5f, onValueChange = { value ->
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(visualizerSize = value)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                        }, onValueChangeFinished = { saveProjects(projects) })
+                                    Text("Movement", style = MaterialTheme.typography.labelMedium)
+                                    Slider(value = currentClip.visualizerMotion.coerceIn(0.1f, 3f),
+                                        valueRange = 0.1f..3f, onValueChange = { value ->
+                                            val cs = project.clips.toMutableList()
+                                            cs[activeClip] = currentClip.copy(visualizerMotion = value)
+                                            val updated = projects.toMutableList()
+                                            updated[selected] = project.copy(clips = cs)
+                                            projects = updated
+                                        }, onValueChangeFinished = { saveProjects(projects) })
                                     Text("Visualizer sensitivity: ${"%.1f".format(java.util.Locale.US, currentClip.visualizerSensitivity)}x",
                                         style = MaterialTheme.typography.labelMedium)
                                     Slider(value = currentClip.visualizerSensitivity.coerceIn(0.25f, 3f),
@@ -2251,7 +2285,7 @@ class MainActivity : ComponentActivity() {
             val clips = obj.optJSONArray("clips") ?: JSONArray()
             Project(obj.getString("name"), obj.getString("ratio"), (0 until clips.length()).map { j ->
                 val c = clips.getJSONObject(j)
-                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat(), c.optDouble("clipSpeed", 1.0).toFloat(), c.optString("transition", "None"), c.optLong("fadeDurationMs", 400L), c.optBoolean("portraitFill", true), c.optString("ttsOriginalUri", ""), c.optString("voiceEffect", "Normal"), c.optDouble("voiceIntensity", 0.7).toFloat(), c.optDouble("wobbleRate", 4.0).toFloat(), c.optDouble("wobbleGrit", 0.25).toFloat(), c.optBoolean("ttsVisualizer", true), c.optDouble("visualizerSensitivity", 1.0).toFloat())
+                Clip(c.getString("uri"), c.getString("kind"), c.getInt("track"), c.optLong("startMs", 0L), c.optLong("endMs", 0L), c.optLong("positionMs", 0L), c.optDouble("pipScale", 0.35).toFloat(), c.optDouble("pipX", 0.55).toFloat(), c.optDouble("pipY", 0.55).toFloat(), c.optString("caption", ""), c.optDouble("textSize", 62.0).toFloat(), c.optInt("textColor", -1), c.optDouble("textX", 0.0).toFloat(), c.optDouble("textY", -0.65).toFloat(), c.optDouble("imageX", 0.0).toFloat(), c.optDouble("imageY", 0.0).toFloat(), c.optDouble("imageScale", 1.0).toFloat(), c.optString("ttsUri", ""), c.optString("spokenText", ""), c.optDouble("ttsVolume", 1.0).toFloat(), c.optDouble("ttsPitch", 1.0).toFloat(), c.optDouble("ttsSpeed", 1.0).toFloat(), c.optString("videoFilter", "None"), c.optDouble("clipVolume", 1.0).toFloat(), c.optDouble("clipSpeed", 1.0).toFloat(), c.optString("transition", "None"), c.optLong("fadeDurationMs", 400L), c.optBoolean("portraitFill", true), c.optString("ttsOriginalUri", ""), c.optString("voiceEffect", "Normal"), c.optDouble("voiceIntensity", 0.7).toFloat(), c.optDouble("wobbleRate", 4.0).toFloat(), c.optDouble("wobbleGrit", 0.25).toFloat(), c.optBoolean("ttsVisualizer", true), c.optDouble("visualizerSensitivity", 1.0).toFloat(), c.optInt("visualizerColor", 0xFFE1CFFA.toInt()), c.optDouble("visualizerSize", 1.0).toFloat(), c.optDouble("visualizerMotion", 1.0).toFloat())
             }, obj.optString("id", "legacy-project-$i"))
         }
     }
@@ -2274,7 +2308,7 @@ class MainActivity : ComponentActivity() {
         val arr = JSONArray()
         projects.forEach { p ->
             val clips = JSONArray()
-            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble()).put("clipSpeed", c.clipSpeed.toDouble()).put("transition", c.transition).put("fadeDurationMs", c.fadeDurationMs).put("portraitFill", c.portraitFill).put("ttsOriginalUri", c.ttsOriginalUri).put("voiceEffect", c.voiceEffect).put("voiceIntensity", c.voiceIntensity.toDouble()).put("wobbleRate", c.wobbleRate.toDouble()).put("wobbleGrit", c.wobbleGrit.toDouble()).put("ttsVisualizer", c.ttsVisualizer).put("visualizerSensitivity", c.visualizerSensitivity.toDouble())) }
+            p.clips.forEach { c -> clips.put(JSONObject().put("uri", c.uri).put("kind", c.kind).put("track", c.track).put("startMs", c.startMs).put("endMs", c.endMs).put("positionMs", c.positionMs).put("pipScale", c.pipScale.toDouble()).put("pipX", c.pipX.toDouble()).put("pipY", c.pipY.toDouble()).put("caption", c.caption).put("textSize", c.textSize.toDouble()).put("textColor", c.textColor).put("textX", c.textX.toDouble()).put("textY", c.textY.toDouble()).put("imageX", c.imageX.toDouble()).put("imageY", c.imageY.toDouble()).put("imageScale", c.imageScale.toDouble()).put("ttsUri", c.ttsUri).put("spokenText", c.spokenText).put("ttsVolume", c.ttsVolume.toDouble()).put("ttsPitch", c.ttsPitch.toDouble()).put("ttsSpeed", c.ttsSpeed.toDouble()).put("videoFilter", c.videoFilter).put("clipVolume", c.clipVolume.toDouble()).put("clipSpeed", c.clipSpeed.toDouble()).put("transition", c.transition).put("fadeDurationMs", c.fadeDurationMs).put("portraitFill", c.portraitFill).put("ttsOriginalUri", c.ttsOriginalUri).put("voiceEffect", c.voiceEffect).put("voiceIntensity", c.voiceIntensity.toDouble()).put("wobbleRate", c.wobbleRate.toDouble()).put("wobbleGrit", c.wobbleGrit.toDouble()).put("ttsVisualizer", c.ttsVisualizer).put("visualizerSensitivity", c.visualizerSensitivity.toDouble()).put("visualizerColor", c.visualizerColor).put("visualizerSize", c.visualizerSize.toDouble()).put("visualizerMotion", c.visualizerMotion.toDouble())) }
             arr.put(JSONObject().put("name", p.name).put("ratio", p.ratio).put("id", p.id).put("clips", clips))
         }
         val serialized = arr.toString()
@@ -2323,7 +2357,7 @@ private fun VideoPreview(source: String, startMs: Long, endMs: Long, playheadMs:
 }
 
 @Composable
-private fun EqualizerPreview(positionMs: Long, source: String, startMs: Long, endMs: Long, modifier: Modifier = Modifier, sensitivity: Float = 1f) {
+private fun EqualizerPreview(positionMs: Long, source: String, startMs: Long, endMs: Long, modifier: Modifier = Modifier, sensitivity: Float = 1f, inkColor: Int = 0xFFE1CFFA.toInt(), sizeScale: Float = 1f, motionSpeed: Float = 1f) {
     val context = LocalContext.current
     var levels by remember(source) { mutableStateOf<List<Float>>(emptyList()) }
     LaunchedEffect(source) {
@@ -2337,7 +2371,7 @@ private fun EqualizerPreview(positionMs: Long, source: String, startMs: Long, en
         val index = ((at.toDouble() / duration) * levels.size).toInt().coerceIn(0, (levels.size - 1).coerceAtLeast(0))
         val amplitude = levels.getOrNull(index) ?: 0f
         drawContext.canvas.nativeCanvas.let {
-            OrbitalScribble.draw(it, size.width, size.height, positionMs, amplitude, sensitivity)
+            OrbitalScribble.draw(it, size.width, size.height, positionMs, amplitude, sensitivity, inkColor, sizeScale, motionSpeed)
         }
     }
 }
