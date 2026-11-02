@@ -1,3 +1,3 @@
-Release request: v1.16.0-beta
-Build 117 - TTS-aware automatic background audio ducking in exported videos
+Release request: v1.17.0-beta
+Build 118 - preview background audio with TTS-aware ducking and smooth 250ms transition envelope in export
 Fallback preserved at fallback/v1.09.0-alpha-build-110
