@@ -1,2 +1,2 @@
-Release request: v0.96.0-alpha
-Build 97 - keep text-to-speech waveform at its actual audio duration when extending a text clip
+Release request: v0.97.0-alpha
+Build 98 - portrait landscape video blurred background and centered foreground with fit toggle
