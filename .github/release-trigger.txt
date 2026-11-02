@@ -1,2 +1,2 @@
-Release request: v1.04.0-alpha
-Build 105 - audio trim in out and duration display HH:MM:SS.ss timecode
+Release request: v1.05.0-alpha
+Build 106 - expanded timeline zoom out to 2.5 percent and readable HH:MM:SS timeline labels
