@@ -1,3 +1,3 @@
-Release request: v1.14.0-beta
-Build 115 - speed-aware split at playhead plus ripple delete timeline action
+Release request: v1.15.0-beta
+Build 116 - five rolling persistent project recovery snapshots with manual restoration
 Fallback preserved at fallback/v1.09.0-alpha-build-110
