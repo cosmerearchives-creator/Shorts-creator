@@ -80,6 +80,7 @@ fun EditingTimeline(
     } }
     var zoom by rememberSaveable { mutableFloatStateOf(1f) }
     var snappingEnabled by rememberSaveable { mutableStateOf(true) }
+    var snapGuideMs by remember { mutableStateOf<Long?>(null) }
     val pxPerMs = with(density) { (PX_PER_SECOND_DP * zoom).dp.toPx() } / 1000f
     val leftPx = with(density) { START_DP.dp.toPx() }
     val durations = remember(clips) { clips.map { it.timelineDurationMs().coerceAtLeast(1L) } }
@@ -254,6 +255,7 @@ fun EditingTimeline(
                             totalDx += beyond
                         }
                         if (drag == null) {
+                            snapGuideMs = null
                             if (moving != null) liveSelect.value(moving) else liveScrub.value(time.coerceAtMost(total))
                         } else {
                             if (moving != null) liveSelect.value(moving)
@@ -282,13 +284,16 @@ fun EditingTimeline(
                                                     }
                                                 }
                                             }
-                                            val snapped = if (snappingEnabled) {
+                                            val nearest = if (snappingEnabled) {
                                                 boundaries.flatMap { edge ->
                                                     listOf(edge, edge - durations[moving])
                                                 }.minByOrNull { kotlin.math.abs(it - proposed) }
                                                     ?.takeIf { kotlin.math.abs(it - proposed) <= snapThreshold } ?: proposed
                                             } else proposed
-                                            currentPosition = snapped.coerceAtLeast(0L)
+                                            snapGuideMs = if (nearest != proposed) {
+                                                if (boundaries.contains(nearest)) nearest else nearest + durations[moving]
+                                            } else null
+                                            currentPosition = nearest.coerceAtLeast(0L)
                                             liveMove.value(moving, currentPosition)
                                         }
                                     }
@@ -300,6 +305,7 @@ fun EditingTimeline(
                                     totalDx += dx
                                     update(dx)
                                 }
+                                snapGuideMs = null
                                 if (action == 3 && initialClip.track == 0) {
                                     val destinationTime = start + (totalDx / pxPerMs).toLong() + durations[moving] / 2
                                     val destination = (laneIndices[0] ?: emptyList())
@@ -387,6 +393,10 @@ fun EditingTimeline(
                         }
                         val clipText = paint.let { android.text.TextUtils.ellipsize(names[i], android.text.TextPaint(it), (w - 10.dp.toPx()).coerceAtLeast(0f), android.text.TextUtils.TruncateAt.END).toString() }
                         drawContext.canvas.nativeCanvas.drawText(clipText, x + 5.dp.toPx(), 34.dp.toPx(), paint)
+                    }
+                    snapGuideMs?.let { guide ->
+                        val guideX = leftPx + guide * pxPerMs - scroll
+                        drawLine(Color(0xFF79E4D5), Offset(guideX, 0f), Offset(guideX, size.height), 2.dp.toPx())
                     }
                     val playX = leftPx + playheadMs * pxPerMs - visibleScroll.value
                     drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
