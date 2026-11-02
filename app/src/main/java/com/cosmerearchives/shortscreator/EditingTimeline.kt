@@ -78,6 +78,7 @@ fun EditingTimeline(
         } catch (_: Exception) { Uri.parse(clip.uri).lastPathSegment?.substringAfterLast('/') ?: "Untitled media" }
     } }
     var zoom by rememberSaveable { mutableFloatStateOf(1f) }
+    var snappingEnabled by rememberSaveable { mutableStateOf(true) }
     val pxPerMs = with(density) { (PX_PER_SECOND_DP * zoom).dp.toPx() } / 1000f
     val leftPx = with(density) { START_DP.dp.toPx() }
     val durations = remember(clips) { clips.map { it.timelineDurationMs().coerceAtLeast(1L) } }
@@ -135,6 +136,7 @@ fun EditingTimeline(
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Timeline", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = { snappingEnabled = !snappingEnabled }) { Text(if (snappingEnabled) "Snap on" else "Snap off", style = MaterialTheme.typography.labelSmall) }
             FilledTonalIconButton(onClick = { zoom = (zoom / 1.5f).coerceAtLeast(MIN_ZOOM) },
                 enabled = zoom > MIN_ZOOM) { Icon(Icons.Default.ZoomOut, "Zoom out timeline") }
             Text("${(zoom * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
@@ -231,7 +233,24 @@ fun EditingTimeline(
                                             liveTrim.value(moving, currentStart, currentEnd)
                                         }
                                         3 -> if (initialClip.track != 0) {
-                                            currentPosition = (currentPosition + delta).coerceAtLeast(0L)
+                                            val proposed = (currentPosition + delta).coerceAtLeast(0L)
+                                            val snapThreshold = (12.dp.toPx() / pxPerMs).toLong().coerceAtMost(400L)
+                                            val boundaries = buildList<Long> {
+                                                add(playheadMs)
+                                                clips.indices.forEach { index ->
+                                                    if (index != moving) {
+                                                        add(positions[index])
+                                                        add(positions[index] + durations[index])
+                                                    }
+                                                }
+                                            }
+                                            val snapped = if (snappingEnabled) {
+                                                boundaries.flatMap { edge ->
+                                                    listOf(edge, edge - durations[moving])
+                                                }.minByOrNull { kotlin.math.abs(it - proposed) }
+                                                    ?.takeIf { kotlin.math.abs(it - proposed) <= snapThreshold } ?: proposed
+                                            } else proposed
+                                            currentPosition = snapped.coerceAtLeast(0L)
                                             liveMove.value(moving, currentPosition)
                                         }
                                     }
