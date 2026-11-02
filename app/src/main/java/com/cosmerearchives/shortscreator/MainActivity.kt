@@ -421,6 +421,40 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             ) { Icon(Icons.Default.FileUpload, "Export to library") }
+                            TextButton(enabled = !exportBusy && project.clips.isNotEmpty(), onClick = {
+                                val limitMs = 10_000L
+                                var elapsed = 0L
+                                val sampleMain = project.clips.filter { it.track == 0 }.mapNotNull { clip ->
+                                    val remaining = limitMs - elapsed
+                                    if (remaining <= 0L) null else {
+                                        val take = minOf(remaining, clip.timelineDurationMs())
+                                        elapsed += take
+                                        clip.copy(endMs = minOf(clip.endMs,
+                                            clip.startMs + (take * clip.clipSpeed.coerceIn(0.5f, 2f)).toLong()))
+                                    }
+                                }
+                                val sampleOverlays = project.clips.filter { it.track != 0 && it.positionMs < limitMs }
+                                    .map { clip ->
+                                        clip.copy(endMs = minOf(clip.endMs, clip.startMs +
+                                            (limitMs - clip.positionMs).coerceAtLeast(100L)))
+                                    }
+                                val sample = sampleMain + sampleOverlays
+                                exportBusy = true
+                                exportStatus = "Preparing 10-second test export…"
+                                try {
+                                    Exporter.exportTimeline(this@MainActivity, sample, project.ratio) { status ->
+                                        runOnUiThread {
+                                            exportStatus = "Test: $status"
+                                            if (status.startsWith("Export saved") ||
+                                                status.contains("failed", ignoreCase = true) ||
+                                                status.startsWith("Export could not start")) exportBusy = false
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    exportBusy = false
+                                    exportStatus = "Test export failed: ${e.message}"
+                                }
+                            }) { Text("Test 10s") }
                             Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
                                 FilledTonalIconButton(onClick = { selectedTrack = 0; sharedLibrary = false; showLibrary = true }) { Icon(Icons.Default.VideoLibrary, "Media library") }
                                 IconButton(onClick = {
