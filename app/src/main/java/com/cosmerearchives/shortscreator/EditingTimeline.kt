@@ -40,6 +40,13 @@ import kotlin.math.max
 
 private const val PX_PER_SECOND_DP = 32f
 private const val START_DP = 56f
+private const val MIN_ZOOM = 0.025f
+
+private fun timelineTimecode(milliseconds: Long): String {
+    val seconds = milliseconds.coerceAtLeast(0L) / 1000L
+    return String.format(java.util.Locale.US, "%02d:%02d:%02d",
+        seconds / 3600L, seconds / 60L % 60L, seconds % 60L)
+}
 private val timelineDark = Color(0xFF292630)
 private val videoColor = Color(0xFF75618F)
 private val overlayColor = Color(0xFF9C86BC)
@@ -128,13 +135,13 @@ fun EditingTimeline(
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Timeline", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-            FilledTonalIconButton(onClick = { zoom = (zoom / 1.5f).coerceAtLeast(0.25f) },
-                enabled = zoom > 0.25f) { Icon(Icons.Default.ZoomOut, "Zoom out timeline") }
+            FilledTonalIconButton(onClick = { zoom = (zoom / 1.5f).coerceAtLeast(MIN_ZOOM) },
+                enabled = zoom > MIN_ZOOM) { Icon(Icons.Default.ZoomOut, "Zoom out timeline") }
             Text("${(zoom * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
             FilledTonalIconButton(onClick = { zoom = (zoom * 1.5f).coerceAtMost(8f) },
                 enabled = zoom < 8f) { Icon(Icons.Default.ZoomIn, "Zoom in timeline") }
         }
-        Text("Playhead: %.1fs".format(playheadMs / 1000.0), style = MaterialTheme.typography.bodySmall)
+        Text("Playhead: ${timelineTimecode(playheadMs)}", style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(6.dp))
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val viewportPx = with(density) { maxWidth.toPx() }
@@ -151,16 +158,22 @@ fun EditingTimeline(
                 drawRect(timelineDark)
                 val paint = rulerPaint.apply { textSize = 11.sp.toPx() }
                 val scroll = visibleScroll.value
-                val first = (((scroll - leftPx) / (pxPerMs * 1000f)).toInt() - 1).coerceAtLeast(0)
-                val last = (((scroll + size.width - leftPx) / (pxPerMs * 1000f)).toInt() + 1).coerceAtMost((total / 1000L).toInt())
-                for (second in first..last) {
-                    val x = leftPx + second * pxPerMs * 1000f - scroll
-                    if (second % 5 == 0) {
-                        drawLine(Color(0xFFE6DEEE), Offset(x, 12.dp.toPx()), Offset(x, size.height), 1.dp.toPx())
-                        drawContext.canvas.nativeCanvas.drawText("${second}s", x + 2.dp.toPx(), 11.dp.toPx(), paint)
-                    } else {
-                        drawLine(Color(0xFF625A6C), Offset(x, 21.dp.toPx()), Offset(x, size.height), 1f)
-                    }
+                // Increase labeled tick spacing as the timeline zooms out, keeping
+                // full HH:MM:SS labels legible even for multi-hour recordings.
+                val pixelsPerSecond = pxPerMs * 1000f
+                val labelInterval = listOf(5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 14400)
+                    .firstOrNull { it * pixelsPerSecond >= 76.dp.toPx() } ?: 28800
+                val firstSecond = (((scroll - leftPx) / pixelsPerSecond).toInt() - labelInterval)
+                    .coerceAtLeast(0)
+                val lastSecond = (((scroll + size.width - leftPx) / pixelsPerSecond).toInt() + labelInterval)
+                    .coerceAtMost((total / 1000L).toInt())
+                val firstLabel = (firstSecond / labelInterval) * labelInterval
+                for (second in firstLabel..lastSecond step labelInterval) {
+                    val x = leftPx + second * pixelsPerSecond - scroll
+                    drawLine(Color(0xFFE6DEEE), Offset(x, 12.dp.toPx()),
+                        Offset(x, size.height), 1.dp.toPx())
+                    drawContext.canvas.nativeCanvas.drawText(
+                        timelineTimecode(second * 1000L), x + 2.dp.toPx(), 11.dp.toPx(), paint)
                 }
                 val playX = leftPx + playheadMs * pxPerMs - visibleScroll.value
                 drawLine(Color.White, Offset(playX, 0f), Offset(playX, size.height), 2.dp.toPx())
