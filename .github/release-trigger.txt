@@ -1,2 +1,2 @@
-Release request: v1.00.0-alpha
-Build 101 - offline TTS voice effects including robot echo reverb radio and wobble with intensity controls
+Release request: v1.01.0-alpha
+Build 102 - Orbital Scribble audio-reactive visualizer for audio-only video preview and export
