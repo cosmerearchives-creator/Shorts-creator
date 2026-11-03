@@ -263,7 +263,10 @@ object Exporter {
                     metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
                 } finally { metadata.release() }
             } catch (_: Exception) { null }
-            duration?.takeIf { it > 0L }?.let { speech.positionMs to (speech.positionMs + it) }
+            duration?.takeIf { it > speech.startMs }?.let {
+                val audible = minOf((it - speech.startMs).coerceAtLeast(0L), speech.timelineDurationMs())
+                speech.positionMs to (speech.positionMs + audible)
+            }
         }
         audio.forEach { clip ->
             require(clip.endMs > clip.startMs) { "Audio needs a known duration before timeline export" }
@@ -314,7 +317,10 @@ object Exporter {
             val speech = android.net.Uri.parse(caption.ttsUri)
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
             if (caption.positionMs > 0L) builder.addGap(caption.positionMs * 1000L)
-            val item = MediaItem.Builder().setUri(speech).build()
+            val item = MediaItem.Builder().setUri(speech)
+                .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(caption.startMs)
+                    .setEndPositionMs(caption.endMs).build()).build()
             builder.addItem(EditedMediaItem.Builder(item).build())
             sequences.add(builder.build())
         }
