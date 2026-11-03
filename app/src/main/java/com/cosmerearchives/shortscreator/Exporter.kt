@@ -197,11 +197,13 @@ object Exporter {
                         if (current != null) {
                             val (text, peaks) = current
                             val elapsed = absoluteMs - text.positionMs
-                            val duration = text.timelineDurationMs().coerceAtLeast(1L)
-                            val bin = ((elapsed.toDouble() / duration) * peaks.size).toInt()
+                            val sourceDuration = speechSourceDurations[text.ttsUri]
+                                ?.coerceAtLeast(1L) ?: text.endMs.coerceAtLeast(1L)
+                            val sourcePosition = text.startMs + elapsed
+                            val bin = ((sourcePosition.toDouble() / sourceDuration) * peaks.size).toInt()
                                 .coerceIn(0, (peaks.size - 1).coerceAtLeast(0))
                             OrbitalScribble.draw(canvas, bitmap.width.toFloat(), bitmap.height.toFloat(),
-                                elapsed, peaks.getOrNull(bin) ?: 0f, text.visualizerSensitivity,
+                                sourcePosition, if (sourcePosition < sourceDuration) peaks.getOrNull(bin) ?: 0f else 0f, text.visualizerSensitivity,
                                 text.visualizerColor, text.visualizerSize, text.visualizerMotion)
                         }
                         return bitmap
@@ -253,20 +255,23 @@ object Exporter {
         val foregroundIndex = if (foregroundSequence != null) 0 else -1
         if (foregroundSequence != null) sequences.add(foregroundSequence)
         sequences.add(mainSequence)
-        val spokenIntervals = clips.filter {
+        val speechClips = clips.filter {
             it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank()
-        }.mapNotNull { speech ->
-            val duration = try {
+        }
+        val speechSourceDurations = speechClips.map { it.ttsUri }.distinct().associateWith { uri ->
+            try {
                 val metadata = MediaMetadataRetriever()
                 try {
-                    metadata.setDataSource(context, Uri.parse(speech.ttsUri))
+                    metadata.setDataSource(context, Uri.parse(uri))
                     metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
                 } finally { metadata.release() }
             } catch (_: Exception) { null }
-            duration?.takeIf { it > speech.startMs }?.let {
-                val audible = minOf((it - speech.startMs).coerceAtLeast(0L), speech.timelineDurationMs())
-                speech.positionMs to (speech.positionMs + audible)
-            }
+        }
+        val spokenIntervals = speechClips.mapNotNull { speech ->
+            val sourceDuration = speechSourceDurations[speech.ttsUri] ?: return@mapNotNull null
+            val audible = minOf((sourceDuration - speech.startMs).coerceAtLeast(0L),
+                speech.timelineDurationMs())
+            if (audible > 0L) speech.positionMs to (speech.positionMs + audible) else null
         }
         audio.forEach { clip ->
             require(clip.endMs > clip.startMs) { "Audio needs a known duration before timeline export" }
@@ -313,14 +318,19 @@ object Exporter {
             }
             sequences.add(builder.build())
         }
-        clips.filter { it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank() }.forEach { caption ->
-            val speech = android.net.Uri.parse(caption.ttsUri)
+        speechClips.forEach { caption ->
+            val sourceEnd = speechSourceDurations[caption.ttsUri]
+                ?.let { minOf(it, caption.endMs) } ?: caption.endMs
+            // A text segment can outlast the generated speech. A later split should
+            // display its text without replaying the beginning of that speech.
+            if (sourceEnd <= caption.startMs) return@forEach
+            val speech = Uri.parse(caption.ttsUri)
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
             if (caption.positionMs > 0L) builder.addGap(caption.positionMs * 1000L)
             val item = MediaItem.Builder().setUri(speech)
                 .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                     .setStartPositionMs(caption.startMs)
-                    .setEndPositionMs(caption.endMs).build()).build()
+                    .setEndPositionMs(sourceEnd).build()).build()
             builder.addItem(EditedMediaItem.Builder(item).build())
             sequences.add(builder.build())
         }
