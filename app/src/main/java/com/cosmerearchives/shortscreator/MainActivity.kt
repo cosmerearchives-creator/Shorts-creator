@@ -586,21 +586,26 @@ class MainActivity : ComponentActivity() {
                                 Triple(it.ttsUri, it.startMs, it.endMs)
                             }) {
                                 speechOverlays.map { clip ->
-                                    ExoPlayer.Builder(this@MainActivity).build().apply {
+                                    val sourceDuration = getDuration(Uri.parse(clip.ttsUri))
+                                    val audibleEnd = if (sourceDuration > 0L) {
+                                        minOf(clip.endMs, sourceDuration)
+                                    } else clip.endMs
+                                    if (audibleEnd <= clip.startMs) null
+                                    else ExoPlayer.Builder(this@MainActivity).build().apply {
                                         setMediaItem(MediaItem.Builder().setUri(Uri.parse(clip.ttsUri))
                                             .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                                                 .setStartPositionMs(clip.startMs)
-                                                .setEndPositionMs(clip.endMs).build()).build())
+                                                .setEndPositionMs(audibleEnd).build()).build())
                                         prepare()
                                     }
                                 }
                             }
                             DisposableEffect(speechPlayers) {
-                                onDispose { speechPlayers.forEach { it.release() } }
+                                onDispose { speechPlayers.forEach { it?.release() } }
                             }
                             LaunchedEffect(speechPlayers, previewPlaying, playheadMs / 100L, speechOverlays) {
                                 speechOverlays.forEachIndexed { index, textClip ->
-                                    val speechPlayer = speechPlayers[index]
+                                    val speechPlayer = speechPlayers[index] ?: return@forEachIndexed
                                     val relative = playheadMs - textClip.positionMs
                                     val active = previewPlaying && relative >= 0L &&
                                         relative < textClip.timelineDurationMs()
@@ -618,7 +623,7 @@ class MainActivity : ComponentActivity() {
                             DisposableEffect(speechPlayers, speechLifecycle) {
                                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                                     if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
-                                        speechPlayers.forEach { it.pause() }
+                                        speechPlayers.forEach { it?.pause() }
                                     }
                                 }
                                 speechLifecycle.lifecycle.addObserver(observer)
@@ -790,7 +795,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     if (visualizerText != null) {
                                         EqualizerPreview(playheadMs - visualizerText.positionMs,
-                                            visualizerText.ttsUri, 0L, visualizerText.timelineDurationMs(),
+                                            visualizerText.ttsUri, visualizerText.startMs, visualizerText.endMs,
                                             Modifier.fillMaxSize(), visualizerText.visualizerSensitivity,
                                             visualizerText.visualizerColor, visualizerText.visualizerSize, visualizerText.visualizerMotion)
                                     }
@@ -991,7 +996,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     if (visualizerText != null) {
                                         EqualizerPreview(playheadMs - visualizerText.positionMs,
-                                            visualizerText.ttsUri, 0L, visualizerText.timelineDurationMs(),
+                                            visualizerText.ttsUri, visualizerText.startMs, visualizerText.endMs,
                                             Modifier.fillMaxSize(), visualizerText.visualizerSensitivity,
                                             visualizerText.visualizerColor, visualizerText.visualizerSize, visualizerText.visualizerMotion)
                                     }
@@ -2031,11 +2036,15 @@ class MainActivity : ComponentActivity() {
                                 val speechAttached = currentClip.ttsUri.isNotBlank()
                                 val speechPreviewPlayer = remember(currentClip.ttsUri, currentClip.startMs, currentClip.endMs) {
                                     currentClip.ttsUri.takeIf { it.isNotBlank() }?.let { source ->
-                                        ExoPlayer.Builder(this@MainActivity).build().apply {
+                                        val sourceDuration = getDuration(Uri.parse(source))
+                                        val audibleEnd = if (sourceDuration > 0L) minOf(sourceDuration, currentClip.endMs)
+                                            else currentClip.endMs
+                                        if (audibleEnd <= currentClip.startMs) null
+                                        else ExoPlayer.Builder(this@MainActivity).build().apply {
                                             setMediaItem(MediaItem.Builder().setUri(Uri.parse(source))
                                                 .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                                                     .setStartPositionMs(currentClip.startMs)
-                                                    .setEndPositionMs(currentClip.endMs).build()).build())
+                                                    .setEndPositionMs(audibleEnd).build()).build())
                                             prepare()
                                         }
                                     }
