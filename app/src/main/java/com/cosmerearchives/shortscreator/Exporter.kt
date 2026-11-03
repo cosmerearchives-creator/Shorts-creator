@@ -128,6 +128,18 @@ object Exporter {
             lines.take(2).forEachIndexed { i, text -> canvas.drawText(text, 512f, 75f + i * 75f, paint) }
             item to bitmap
         }
+        val speechClips = clips.filter {
+            it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank()
+        }
+        val speechSourceDurations = speechClips.map { it.ttsUri }.distinct().associateWith { uri ->
+            try {
+                val metadata = MediaMetadataRetriever()
+                try {
+                    metadata.setDataSource(context, Uri.parse(uri))
+                    metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                } finally { metadata.release() }
+            } catch (_: Exception) { null }
+        }
         val reactiveText = if (overlayOnly) visualOverlays.filter {
             it.kind == "text" && it.ttsVisualizer && it.ttsUri.isNotBlank()
         }.map { text ->
@@ -255,18 +267,6 @@ object Exporter {
         val foregroundIndex = if (foregroundSequence != null) 0 else -1
         if (foregroundSequence != null) sequences.add(foregroundSequence)
         sequences.add(mainSequence)
-        val speechClips = clips.filter {
-            it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank()
-        }
-        val speechSourceDurations = speechClips.map { it.ttsUri }.distinct().associateWith { uri ->
-            try {
-                val metadata = MediaMetadataRetriever()
-                try {
-                    metadata.setDataSource(context, Uri.parse(uri))
-                    metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-                } finally { metadata.release() }
-            } catch (_: Exception) { null }
-        }
         val spokenIntervals = speechClips.mapNotNull { speech ->
             val sourceDuration = speechSourceDurations[speech.ttsUri] ?: return@mapNotNull null
             val audible = minOf((sourceDuration - speech.startMs).coerceAtLeast(0L),
