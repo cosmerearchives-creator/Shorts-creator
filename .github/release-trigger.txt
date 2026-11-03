@@ -1,3 +1,3 @@
-Release request: v1.21.0-beta
-Build 122 - preview playback stability: reuse audio players across setting changes, clipped audio sync, speech timeline duration
-Fallback preserved at fallback/v1.09.0-alpha-build-110
+Release request: v1.22.0-beta
+Build 123 - split TTS text uses distinct clipped speech players, correctly trimmed export audio, waveform, and visualizer source offsets
+Fallback remains fallback/v1.09.0-alpha-build-110
