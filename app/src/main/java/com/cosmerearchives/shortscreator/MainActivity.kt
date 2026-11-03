@@ -580,20 +580,27 @@ class MainActivity : ComponentActivity() {
                                     it.track == 1 && it.kind == "text" && it.ttsUri.isNotBlank()
                                 }
                             }
-                            val speechPlayers = remember(project.id, speechOverlays.map { it.ttsUri }) {
-                                speechOverlays.associate { clip ->
-                                    clip.ttsUri to ExoPlayer.Builder(this@MainActivity).build().apply {
-                                        setMediaItem(MediaItem.fromUri(Uri.parse(clip.ttsUri)))
+                            // Every text segment needs its own player: split segments can reference
+                            // the same TTS file but start at different source offsets.
+                            val speechPlayers = remember(project.id, speechOverlays.map {
+                                Triple(it.ttsUri, it.startMs, it.endMs)
+                            }) {
+                                speechOverlays.map { clip ->
+                                    ExoPlayer.Builder(this@MainActivity).build().apply {
+                                        setMediaItem(MediaItem.Builder().setUri(Uri.parse(clip.ttsUri))
+                                            .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                                                .setStartPositionMs(clip.startMs)
+                                                .setEndPositionMs(clip.endMs).build()).build())
                                         prepare()
                                     }
                                 }
                             }
                             DisposableEffect(speechPlayers) {
-                                onDispose { speechPlayers.values.forEach { it.release() } }
+                                onDispose { speechPlayers.forEach { it.release() } }
                             }
                             LaunchedEffect(speechPlayers, previewPlaying, playheadMs / 100L, speechOverlays) {
-                                speechOverlays.forEach { textClip ->
-                                    val speechPlayer = speechPlayers[textClip.ttsUri] ?: return@forEach
+                                speechOverlays.forEachIndexed { index, textClip ->
+                                    val speechPlayer = speechPlayers[index]
                                     val relative = playheadMs - textClip.positionMs
                                     val active = previewPlaying && relative >= 0L &&
                                         relative < textClip.timelineDurationMs()
@@ -611,7 +618,7 @@ class MainActivity : ComponentActivity() {
                             DisposableEffect(speechPlayers, speechLifecycle) {
                                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                                     if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
-                                        speechPlayers.values.forEach { it.pause() }
+                                        speechPlayers.forEach { it.pause() }
                                     }
                                 }
                                 speechLifecycle.lifecycle.addObserver(observer)
@@ -2022,10 +2029,13 @@ class MainActivity : ComponentActivity() {
                                 Text("Generate speech again to apply changed voice settings.",
                                     style = MaterialTheme.typography.bodySmall)
                                 val speechAttached = currentClip.ttsUri.isNotBlank()
-                                val speechPreviewPlayer = remember(currentClip.ttsUri) {
+                                val speechPreviewPlayer = remember(currentClip.ttsUri, currentClip.startMs, currentClip.endMs) {
                                     currentClip.ttsUri.takeIf { it.isNotBlank() }?.let { source ->
                                         ExoPlayer.Builder(this@MainActivity).build().apply {
-                                            setMediaItem(MediaItem.fromUri(Uri.parse(source)))
+                                            setMediaItem(MediaItem.Builder().setUri(Uri.parse(source))
+                                                .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                                                    .setStartPositionMs(currentClip.startMs)
+                                                    .setEndPositionMs(currentClip.endMs).build()).build())
                                             prepare()
                                         }
                                     }
